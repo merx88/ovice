@@ -2,24 +2,14 @@
 import { MeshPhysicalMaterial, MeshStandardMaterial } from 'three'
 import { tokens } from '../theme/tokens'
 
-/** Metals show nothing but reflections, so they take the environment brighter than plastics do. */
-const METAL_ENV_BOOST = 1.5
+/**
+ * Mirror-polished metal (bookshelf frame). A mirror has no color of its own:
+ * it is white and shows whatever the studio puts in front of it.
+ */
+export const chrome = new MeshPhysicalMaterial({ color: tokens.white, metalness: 1, roughness: 0.15 })
 
-/** Mirror-polished metal (bookshelf frame). */
-export const chrome = new MeshPhysicalMaterial({
-  color: tokens.chrome,
-  metalness: 1,
-  roughness: 0.15,
-  envMapIntensity: METAL_ENV_BOOST,
-})
-
-/** Satin, balloon-like metal (the inflated armchair). */
-export const silver = new MeshPhysicalMaterial({
-  color: tokens.chrome,
-  metalness: 1,
-  roughness: 0.3,
-  envMapIntensity: METAL_ENV_BOOST,
-})
+/** Polished, balloon-like metal (the inflated armchair), a little softer and grayer than chrome. */
+export const silver = new MeshPhysicalMaterial({ color: tokens.chrome, metalness: 1, roughness: 0.22 })
 
 const glossyByColor = new Map<string, MeshPhysicalMaterial>()
 const matteByColor = new Map<string, MeshStandardMaterial>()

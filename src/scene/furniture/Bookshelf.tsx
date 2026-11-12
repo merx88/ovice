@@ -5,11 +5,11 @@ import { extrudeRounded, roundedFrameShape, roundedRectShape } from '../geometry
 import { chrome, glossy, matte } from '../materials'
 import { Arch, Book, FlatBook, Plant } from './Props'
 
-const WIDTH = 0.98
-const HEIGHT = 1.76
+const WIDTH = 1
+const HEIGHT = 1.78
 const DEPTH = 0.42
-/** The chrome band wrapped around the stack of cells. */
-const FRAME = { band: 0.055, corner: 0.17, edge: 0.024 } as const
+/** The fat chrome band wrapped around the stack of cells; the cells bulge a little over its inner edge. */
+const FRAME = { band: 0.09, corner: 0.19, edge: 0.04 } as const
 /** One open-fronted tray; four are stacked inside the frame. */
 const CELL = {
   width: 0.87,
@@ -21,7 +21,7 @@ const CELL = {
   gap: 0.005,
   backThickness: 0.03,
   /** How far the cells stand out in front of the frame. */
-  proud: 0.012,
+  proud: 0.025,
   /** Thickness of the matte lining that keeps the inside from mirroring the room. */
   lining: 0.006,
 } as const

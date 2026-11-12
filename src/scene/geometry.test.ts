@@ -119,6 +119,20 @@ describe('flatRing', () => {
 })
 
 describe('gradientStrip', () => {
+  it('winds its triangles so the front face looks along +z', () => {
+    const strip = gradientStrip(4, [
+      { y: 0, color: new Color(1, 1, 1) },
+      { y: 1, color: new Color(1, 1, 1) },
+    ])
+    const position = strip.getAttribute('position')
+    const index = strip.getIndex()!
+    for (let face = 0; face < index.count; face += 3) {
+      const [a, b, c] = [0, 1, 2].map((corner) => new Vector3().fromBufferAttribute(position, index.getX(face + corner)))
+      const normal = b.sub(a).cross(c.sub(a)).normalize()
+      expect(normal.z).toBeCloseTo(1)
+    }
+  })
+
   it('builds one row of vertices per stop with its color and opacity', () => {
     const strip = gradientStrip(4, [
       { y: 0, color: new Color(1, 0, 0) },

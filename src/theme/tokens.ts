@@ -2,7 +2,7 @@
 // reference renders; every other file imports from here.
 export const tokens = {
   bg: '#F4F4F6',
-  floor: '#D6D3D8',
+  floor: '#DCDCDC',
   orange: '#F5570A',
   black: '#1A1919',
   cream: '#F6E8E0',

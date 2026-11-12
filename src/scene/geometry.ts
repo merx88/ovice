@@ -140,7 +140,8 @@ export interface GradientStop {
 
 /**
  * A flat strip in the xy plane, centred on x, whose vertex colors (with alpha)
- * blend from one stop to the next along y.
+ * blend from one stop to the next along y. Its front face looks along +z, so
+ * turn it to face the viewer or it is culled.
  */
 export function gradientStrip(width: number, stops: readonly GradientStop[]): BufferGeometry {
   const positions: number[] = []

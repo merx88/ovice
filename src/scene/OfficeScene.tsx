@@ -37,8 +37,20 @@ const SEAM_BLEND_DEPTH = 0.45
 const OVERLAY_GAP = 0.002
 /** How dark the furniture's shadows fall on the wall. */
 const WALL_SHADOW_OPACITY = 0.1
-/** A satin floor with a faint, fully blurred mirror image of the furniture. */
-const FLOOR_FINISH = { roughness: 0.6, mirror: 0.1, mixStrength: 0.1, mixBlur: 2, blur: [500, 220], resolution: 512 } as const
+/**
+ * A matte floor with a faint, fully blurred mirror image of the furniture.
+ * `mirror` takes a little more of the floor's own color away than
+ * `mixStrength` gives back from the bright room, which trims an open patch of
+ * floor down to `tokens.floor` under this lighting.
+ */
+const FLOOR_FINISH = {
+  roughness: 1,
+  mirror: 0.11,
+  mixStrength: 0.1,
+  mixBlur: 1,
+  blur: [500, 220],
+  resolution: 512,
+} as const
 
 const wallColor = new Color(tokens.bg)
 const wallFootColor = new Color(tokens.bg).lerp(new Color(tokens.floor), 0.6)
@@ -47,9 +59,10 @@ const wallGeometry = gradientStrip(ROOM.width, [
   { y: WALL_SHADE_HEIGHT, color: wallColor },
   { y: ROOM.wallHeight, color: wallColor },
 ])
+/** Lies on the floor with y = 0 at its camera-side edge and y = SEAM_BLEND_DEPTH at the wall. */
 const seamGeometry = gradientStrip(ROOM.width, [
-  { y: 0, color: wallFootColor, opacity: 1 },
-  { y: SEAM_BLEND_DEPTH, color: wallFootColor, opacity: 0 },
+  { y: 0, color: wallFootColor, opacity: 0 },
+  { y: SEAM_BLEND_DEPTH, color: wallFootColor, opacity: 1 },
 ])
 
 /** Pale, faintly reflective floor meeting a wall in the page's background color. */
@@ -69,7 +82,11 @@ function Room() {
           resolution={FLOOR_FINISH.resolution}
         />
       </mesh>
-      <mesh geometry={seamGeometry} rotation={[Math.PI / 2, 0, 0]} position={[0, OVERLAY_GAP, WALL_Z]}>
+      <mesh
+        geometry={seamGeometry}
+        rotation={[-Math.PI / 2, 0, 0]}
+        position={[0, OVERLAY_GAP, WALL_Z + SEAM_BLEND_DEPTH]}
+      >
         <meshBasicMaterial vertexColors transparent depthWrite={false} toneMapped={false} />
       </mesh>
       <mesh geometry={wallGeometry} position={[0, 0, WALL_Z]}>

@@ -43,10 +43,18 @@ const STUDIO_PANELS: readonly StudioPanel[] = [
   { color: tokens.white, intensity: 1.5, position: [0, 9, 3], size: [14, 10] },
   // Key panel, front left: the main highlight on glossy surfaces.
   { color: tokens.white, intensity: 2.2, position: [-10, 6, 8], size: [7, 7] },
-  // Dark cards: the thin streaks that make chrome read as chrome.
-  { color: tokens.black, intensity: 1, position: [-15, 3, 6], size: [1.2, 12] },
-  { color: tokens.black, intensity: 1, position: [13, 3, -8], size: [1.5, 12] },
-  { color: tokens.black, intensity: 1, position: [6, 2, 16], size: [0.8, 12] },
+  // Dark cards at both sides: rounded chrome mirrors them along its edges,
+  // which is what makes it read as chrome rather than gray paint.
+  { color: tokens.black, intensity: 1, position: [-14, 3, 1], size: [7, 14] },
+  { color: tokens.black, intensity: 1, position: [14, 3, 1], size: [7, 14] },
+  // ...and behind both back corners, which gives chrome its dark outline against the pale wall.
+  { color: tokens.black, intensity: 1, position: [-10, 3, -12], size: [8, 14] },
+  { color: tokens.black, intensity: 1, position: [10, 3, -12], size: [8, 14] },
+  // Bright strips next to them, for the crisp highlight lines.
+  { color: tokens.white, intensity: 5, position: [-7, 3, 13], size: [1.2, 12] },
+  { color: tokens.white, intensity: 5, position: [10, 3, 11], size: [1.2, 12] },
+  // A thin dark streak across the front.
+  { color: tokens.black, intensity: 1, position: [5, 2, 16], size: [0.8, 12] },
 ]
 
 // --- Contact shadows --------------------------------------------------------
