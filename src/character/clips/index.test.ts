@@ -1,6 +1,7 @@
 import { AnimationClip } from 'three'
 import { describe, expect, it } from 'vitest'
 import { BONE_NAMES, CLIP_NAMES, CLIPS, resolveClip, type ClipName, type Pose } from './index'
+import { seatedBase, standingBase } from './shared'
 
 const ALL_CLIPS: ClipName[] = [
   'idle',
@@ -30,6 +31,21 @@ function expectValidPose(pose: Pose) {
       if (offset === undefined) continue
       expect(offset).toHaveLength(3)
       for (const value of offset) expect(Number.isFinite(value)).toBe(true)
+    }
+  }
+}
+
+/**
+ * Fails unless both poses put every bone in the same place; a bone a pose
+ * leaves out is at rest. Bones in `roughly` may be up to 0.05 off.
+ */
+function expectSamePose(actual: Pose, expected: Pose, roughly: string[] = []) {
+  for (const bone of BONE_NAMES) {
+    const digits = roughly.includes(bone) ? 1 : 2
+    for (const offset of ['rot', 'pos'] as const) {
+      const got = actual[bone]?.[offset] ?? [0, 0, 0]
+      const want = expected[bone]?.[offset] ?? [0, 0, 0]
+      got.forEach((value, axis) => expect(value, `${bone} ${offset}[${axis}]`).toBeCloseTo(want[axis], digits))
     }
   }
 }
@@ -86,13 +102,28 @@ describe('clip registry', () => {
     expect(clip.sample(duration + 5)).toEqual(clip.sample(duration))
   })
 
-  it('ends standing up where walking starts from, and sitting down where idling starts from', () => {
-    const standing = CLIPS.standUp.sample(CLIPS.standUp.duration as number)
-    const seated = CLIPS.sitDown.sample(CLIPS.sitDown.duration as number)
-    // Standing leaves the body on the ground; sitting lifts it onto the seat.
-    expect(standing['root 1']?.pos?.[1] ?? 0).toBeCloseTo(0)
-    expect(seated['root 1']?.pos?.[1] ?? 0).toBeGreaterThan(0.05)
-    expect(CLIPS.standUp.sample(0)['root 1']?.pos?.[1]).toBeCloseTo(seated['root 1']?.pos?.[1] ?? 0)
-    expect(CLIPS.sitDown.sample(0)['root 1']?.pos?.[1] ?? 0).toBeCloseTo(0)
+  it('gets up from the seated pose into the standing pose', () => {
+    expectSamePose(CLIPS.standUp.sample(0), seatedBase)
+    expectSamePose(CLIPS.standUp.sample(CLIPS.standUp.duration as number), standingBase)
   })
+
+  it('sits down from the standing pose into the seated pose', () => {
+    expectSamePose(CLIPS.sitDown.sample(0), standingBase)
+    expectSamePose(CLIPS.sitDown.sample(CLIPS.sitDown.duration as number), seatedBase)
+  })
+
+  it('lifts the seated body onto the seat and leaves the standing body on the ground', () => {
+    expect(seatedBase['root 1']?.pos?.[1]).toBeGreaterThan(0.05)
+    expect(standingBase['root 1']?.pos?.[1] ?? 0).toBe(0)
+  })
+
+  it.each(['wave', 'sip', 'stretch', 'lookAround', 'tap', 'scratchHead'] as const)(
+    '%s starts and ends in the seated pose, so idling can follow it without a jump',
+    (name) => {
+      const clip = CLIPS[name]
+      // Breathing, which runs through most clips, moves these by a hundredth of a radian or so.
+      const breathing = ['body', 'head', 'arm_L.001', 'arm_R.001']
+      for (const t of [0, clip.duration as number]) expectSamePose(clip.sample(t), seatedBase, breathing)
+    },
+  )
 })

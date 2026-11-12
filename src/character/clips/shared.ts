@@ -212,7 +212,7 @@ export const ARM_DOWN: ArmPose = { upper: [-0.22, -0.05, -0.83], fore: [0.17, 0.
 export const ARM_ON_DESK: ArmPose = { upper: [0.91, -0.76, 0.27], fore: [-0.11, -0.68, 0.06], hand: [-0.06, -0.02, 0.15] }
 
 /** A hand lifted off the desk and drawn back to the chest, clear of the desk's edge. */
-export const ARM_TUCKED: ArmPose = { upper: [0.56, 0.73, -0.37], fore: [-0.19, -2.06, -0.57], hand: [0.13, -0.16, 0.27] }
+const ARM_TUCKED: ArmPose = { upper: [0.56, 0.73, -0.37], fore: [-0.19, -2.06, -0.57], hand: [0.13, -0.16, 0.27] }
 
 /** Standing upright with the arms down. */
 export const standingBase: Pose = {
@@ -227,6 +227,12 @@ export const seatedBase: Pose = {
   ...arms(ARM_ON_DESK),
   ...legs({ thigh: [-0.5, 0, 0], foot: [0.4, 0, 0] }),
 }
+
+/**
+ * Seated, with the hands drawn back off the desk: what getting up starts with
+ * and sitting down ends with, so that the hands never sweep through the desk.
+ */
+export const seatedTucked: Pose = { ...seatedBase, ...arms(ARM_TUCKED) }
 
 /** The slow rise and fall of breathing, added to whatever else the body does. */
 export function breathing(t: number): Pose {

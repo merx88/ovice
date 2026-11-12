@@ -12,6 +12,7 @@ export const think: ProceduralClip = {
   duration: null,
   sample: (t) => {
     const ponder = Math.sin((t * TAU) / 4.2)
+    // The hand at the chin taps now and then.
     const tapping = Math.max(0, Math.sin(t * TAU * 1.1))
     return add(add(thinkBase, breathing(t)), {
       head: { rot: [0.02 * ponder, 0.05 * ponder, 0.04 * ponder] },
