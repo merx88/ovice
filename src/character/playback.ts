@@ -6,6 +6,13 @@ import type { ClipName } from './clips'
 /** Seconds a change of clip takes to blend in. */
 export const CROSS_FADE = 0.25
 
+/**
+ * The longest time step (s) one frame may move an animation on by, so that a
+ * long gap between frames (a tab coming back from the background) is not
+ * played as one jump.
+ */
+export const MAX_STEP = 0.1
+
 export interface Playback {
   /** The clip being played, or null before the first frame. */
   name: ClipName | null

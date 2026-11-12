@@ -18,7 +18,7 @@ import { tokens } from '../theme/tokens'
 import { CLIPS, resolveClip, type ClipName } from './clips'
 import { Folder } from './Folder'
 import { computeLookPitch, computeLookYaw, damp, lookAngles } from './lookAt'
-import { advancePlayback, createPlayback } from './playback'
+import { advancePlayback, createPlayback, MAX_STEP } from './playback'
 import { applyPose, applyRest, createRig, MODEL_URL, setEyeOpenness, turnBone, type Rig } from './rig'
 import { StatusBadge, type BadgeStatus } from './StatusBadge'
 
@@ -27,8 +27,9 @@ export interface CharacterProps {
   clip: ClipName
   /**
    * The point on the ground under the character: between its feet when it
-   * stands, under its hips when it sits. Read every frame, so whoever moves
-   * the character may also do so by changing the tuple in place.
+   * stands, under its hips when it sits. A y above 0 lifts the character off
+   * the floor; its shadow stays on the floor. Read every frame, so whoever
+   * moves the character may also do so by changing the tuple in place.
    */
   position: Vec3
   /** Yaw in radians about +y; 0 faces +z. */
@@ -44,8 +45,6 @@ export interface CharacterProps {
   onFolderClick(): void
 }
 
-/** Longest time step (s) a single frame may advance the animation by, e.g. after the tab was in the background. */
-const MAX_STEP = 0.1
 /** How quickly head and body turn towards the look target (1/s). */
 const LOOK_RATE = 8
 /** The eyes close for this long (s), at random intervals within this range (s). */
@@ -56,7 +55,7 @@ const BADGE_ABOVE_HEAD = 0.66
 const PALM_ALONG_HAND = 0.07
 /** Where the folder sits relative to the point midway between the palms (m, character space). */
 const FOLDER_OFFSET = new Vector3(0, 0.03, 0.06)
-/** The soft shadow on the floor under the character. */
+/** The soft shadow on the floor (y = 0) under the character; `lift` keeps it from flickering against the floor. */
 const GROUND_SHADOW = { diameter: 1.05, opacity: 0.34, lift: 0.006 } as const
 
 const shadowUniforms = { uColor: { value: new Color(tokens.black) }, uOpacity: { value: GROUND_SHADOW.opacity } }
@@ -247,7 +246,7 @@ export function Character(props: CharacterProps) {
     // --- The things that follow the body ------------------------------------
     rig.byName.head.bone.getWorldPosition(state.head)
     badgeAnchor.current?.position.copy(state.head).setY(state.head.y + BADGE_ABOVE_HEAD)
-    shadow.current?.position.set(position[0], position[1] + GROUND_SHADOW.lift, position[2])
+    shadow.current?.position.set(position[0], GROUND_SHADOW.lift, position[2])
     if (folder.current) {
       scratchVector.set(0, 0, 0)
       for (const hand of [rig.byName['arm_L.003'].bone, rig.byName['arm_R.003'].bone]) {

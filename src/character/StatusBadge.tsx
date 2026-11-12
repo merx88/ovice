@@ -5,6 +5,7 @@ import { flatRing } from '../scene/geometry'
 import { glossy } from '../scene/materials'
 import { tokens } from '../theme/tokens'
 import { damp } from './lookAt'
+import { MAX_STEP } from './playback'
 
 export type BadgeStatus = 'idle' | 'working' | 'done' | 'error'
 
@@ -43,17 +44,19 @@ const SETTLE_RATE = 10
 export function StatusBadge({ status }: StatusBadgeProps) {
   const facing = useRef<Group>(null)
   const moving = useRef<Group>(null)
-  const motion = useRef({ spin: 0, lift: 0, scale: 1, sinceChange: 0 })
+  const motion = useRef({ time: 0, spin: 0, lift: 0, scale: 1, sinceChange: 0 })
 
   useEffect(() => {
     motion.current.sinceChange = 0
   }, [status])
 
-  useFrame(({ camera, clock }, delta) => {
+  useFrame(({ camera }, frameDelta) => {
     if (!facing.current || !moving.current) return
     const state = motion.current
-    const time = clock.elapsedTime
+    const delta = Math.min(frameDelta, MAX_STEP)
+    state.time += delta
     state.sinceChange += delta
+    const { time } = state
 
     let lift = 0
     let scale = 1
@@ -83,9 +86,9 @@ export function StatusBadge({ status }: StatusBadgeProps) {
   return (
     <group ref={facing}>
       <group ref={moving}>
-        <mesh geometry={outerRingGeometry} material={material} castShadow />
-        <mesh geometry={innerRingGeometry} material={material} castShadow />
-        <mesh geometry={dotGeometry} material={material} castShadow />
+        <mesh geometry={outerRingGeometry} material={material} />
+        <mesh geometry={innerRingGeometry} material={material} />
+        <mesh geometry={dotGeometry} material={material} />
       </group>
     </group>
   )

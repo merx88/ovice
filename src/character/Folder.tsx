@@ -11,9 +11,9 @@ export interface FolderProps {
 }
 
 /** Overall size of the folder (m); it is seen from its front, +z. */
-export const FOLDER_SIZE = { width: 0.43, height: 0.3, depth: 0.04 } as const
-
-const { width: WIDTH, height: HEIGHT, depth: DEPTH } = FOLDER_SIZE
+const WIDTH = 0.43
+const HEIGHT = 0.3
+const DEPTH = 0.04
 const COVER_THICKNESS = 0.016
 const CORNER = 0.007
 /** The back cover carries a tab on the left that stands this much taller. */
@@ -75,7 +75,9 @@ export const Folder = forwardRef<Group, FolderProps>(function Folder({ onClick }
 
   useFrame(() => {
     if (!group.current || !button.current) return
-    if (!(buttonAt.distanceTo(group.current.position) <= BUTTON_SLACK)) buttonAt.copy(group.current.position)
+    // Also true on the first frame, when the button has not been placed yet.
+    const drifted = !(buttonAt.distanceTo(group.current.position) <= BUTTON_SLACK)
+    if (drifted) buttonAt.copy(group.current.position)
     button.current.position.copy(buttonAt)
   })
 
@@ -116,7 +118,14 @@ export const Folder = forwardRef<Group, FolderProps>(function Folder({ onClick }
         />
       </group>
       <group ref={button}>
-        <Html transform distanceFactor={HTML_DISTANCE_FACTOR} position={[0, TAB.rise / 2, DEPTH / 2]} rotation={[TILT, 0, 0]}>
+        <Html
+          transform
+          distanceFactor={HTML_DISTANCE_FACTOR}
+          // Level with the canvas, so that any interface drawn over the scene is also over this button.
+          zIndexRange={[0, 0]}
+          position={[0, TAB.rise / 2, DEPTH / 2]}
+          rotation={[TILT, 0, 0]}
+        >
           <button
             type="button"
             data-testid="folder-hit"

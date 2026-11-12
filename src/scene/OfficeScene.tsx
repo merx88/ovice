@@ -117,7 +117,9 @@ function previewCharacter(): CharacterProps {
   if (!import.meta.env.DEV) return seated
   const query = new URLSearchParams(window.location.search)
   const handoff: Partial<CharacterProps> =
-    query.get('pose') === 'handoff' ? { clip: 'holdFile', position: HANDOFF_POS, facing: 0, badge: 'done', holdingFile: true } : {}
+    query.get('pose') === 'handoff'
+      ? { clip: 'holdFile', position: HANDOFF_POS, facing: SEAT_FACING, badge: 'done', holdingFile: true }
+      : {}
   const clip = CLIP_NAMES.find((name) => name === query.get('clip'))
   const badge = BADGES.find((status) => status === query.get('badge'))
   const look = (query.get('look') ?? '').split(',').map(Number)
