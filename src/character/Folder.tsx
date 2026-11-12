@@ -1,7 +1,8 @@
-import { Html, RoundedBox } from '@react-three/drei'
+import { Html } from '@react-three/drei'
 import { useFrame, type ThreeEvent } from '@react-three/fiber'
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, type CSSProperties } from 'react'
 import { Vector3, type Group } from 'three'
+import { extrudeRounded, roundedRectShape } from '../scene/geometry'
 import { glossy, matte } from '../scene/materials'
 import { tokens } from '../theme/tokens'
 
@@ -14,14 +15,26 @@ export interface FolderProps {
 const WIDTH = 0.43
 const HEIGHT = 0.3
 const DEPTH = 0.04
-const COVER_THICKNESS = 0.016
-const CORNER = 0.007
+const COVER = { thickness: 0.016, corner: 0.024, edge: 0.004 } as const
 /** The back cover carries a tab on the left that stands this much taller. */
-const TAB = { width: WIDTH * 0.4, rise: 0.028 } as const
+const TAB = { width: WIDTH * 0.4, rise: 0.028, height: 0.09 } as const
 /** The front cover stops this far below the back cover, showing the paper. */
 const FRONT_DROP = 0.03
 /** The sheet of paper shows this much above the front cover. */
-const PAPER = { inset: 0.018, show: 0.016, thickness: 0.006 } as const
+const PAPER = { inset: 0.018, show: 0.016, thickness: 0.006, corner: 0.008 } as const
+
+const backGeometry = extrudeRounded(roundedRectShape(WIDTH, HEIGHT, COVER.corner), COVER.thickness, COVER.edge)
+const tabGeometry = extrudeRounded(roundedRectShape(TAB.width, TAB.height, COVER.corner), COVER.thickness, COVER.edge)
+const frontGeometry = extrudeRounded(
+  roundedRectShape(WIDTH, HEIGHT - FRONT_DROP, COVER.corner),
+  COVER.thickness,
+  COVER.edge,
+)
+const paperGeometry = extrudeRounded(
+  roundedRectShape(WIDTH - PAPER.inset * 2, HEIGHT - PAPER.inset, PAPER.corner),
+  PAPER.thickness,
+  PAPER.thickness / 3,
+)
 
 /** The folder leans back a little, towards whoever looks at it from above. */
 const TILT = -0.12
@@ -46,7 +59,7 @@ const buttonStyle: CSSProperties = {
   height: (HEIGHT + TAB.rise) * PIXELS_PER_METRE,
   padding: 0,
   border: 'none',
-  borderRadius: CORNER * PIXELS_PER_METRE * 2,
+  borderRadius: COVER.corner * PIXELS_PER_METRE,
   background: 'transparent',
   cursor: 'pointer',
 }
@@ -64,7 +77,7 @@ function setCursor(cursor: string) {
  */
 export const Folder = forwardRef<Group, FolderProps>(function Folder({ onClick }, ref) {
   const blue = glossy(tokens.folderBlue)
-  const coverZ = (DEPTH - COVER_THICKNESS) / 2
+  const coverZ = (DEPTH - COVER.thickness) / 2
   const group = useRef<Group>(null)
   const button = useRef<Group>(null)
   /** Where the button is held, in the space the folder is moved in. */
@@ -95,27 +108,19 @@ export const Folder = forwardRef<Group, FolderProps>(function Folder({ onClick }
         onPointerOver={() => setCursor('pointer')}
         onPointerOut={() => setCursor('auto')}
       >
-        <RoundedBox args={[WIDTH, HEIGHT, COVER_THICKNESS]} radius={CORNER} material={blue} position={[0, 0, -coverZ]} castShadow />
-        <RoundedBox
-          args={[TAB.width, TAB.rise * 2, COVER_THICKNESS]}
-          radius={CORNER}
+        <mesh geometry={backGeometry} material={blue} position={[0, 0, -coverZ]} castShadow />
+        <mesh
+          geometry={tabGeometry}
           material={blue}
-          position={[(TAB.width - WIDTH) / 2, HEIGHT / 2, -coverZ]}
+          position={[(TAB.width - WIDTH) / 2, HEIGHT / 2 + TAB.rise - TAB.height / 2, -coverZ]}
           castShadow
         />
-        <RoundedBox
-          args={[WIDTH - PAPER.inset * 2, HEIGHT - PAPER.inset, PAPER.thickness]}
-          radius={PAPER.thickness / 3}
+        <mesh
+          geometry={paperGeometry}
           material={matte(tokens.white)}
           position={[0, PAPER.show - FRONT_DROP + PAPER.inset / 2, 0]}
         />
-        <RoundedBox
-          args={[WIDTH, HEIGHT - FRONT_DROP, COVER_THICKNESS]}
-          radius={CORNER}
-          material={blue}
-          position={[0, -FRONT_DROP / 2, coverZ]}
-          castShadow
-        />
+        <mesh geometry={frontGeometry} material={blue} position={[0, -FRONT_DROP / 2, coverZ]} castShadow />
       </group>
       <group ref={button}>
         <Html
