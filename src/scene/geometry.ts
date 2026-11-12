@@ -135,21 +135,19 @@ export interface GradientStop {
   /** Distance of this stop along the strip's y axis. */
   y: number
   color: Color
-  opacity?: number
 }
 
 /**
- * A flat strip in the xy plane, centred on x, whose vertex colors (with alpha)
- * blend from one stop to the next along y. Its front face looks along +z, so
- * turn it to face the viewer or it is culled.
+ * A flat strip in the xy plane, centred on x, whose vertex colors blend from
+ * one stop to the next along y. Its front face looks along +z.
  */
 export function gradientStrip(width: number, stops: readonly GradientStop[]): BufferGeometry {
   const positions: number[] = []
   const colors: number[] = []
   const indices: number[] = []
-  stops.forEach(({ y, color, opacity = 1 }, row) => {
+  stops.forEach(({ y, color }, row) => {
     positions.push(-width / 2, y, 0, width / 2, y, 0)
-    colors.push(color.r, color.g, color.b, opacity, color.r, color.g, color.b, opacity)
+    colors.push(color.r, color.g, color.b, color.r, color.g, color.b)
     if (row > 0) {
       const base = (row - 1) * 2
       indices.push(base, base + 1, base + 2, base + 1, base + 3, base + 2)
@@ -157,7 +155,7 @@ export function gradientStrip(width: number, stops: readonly GradientStop[]): Bu
   })
   const geometry = new BufferGeometry()
   geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
-  geometry.setAttribute('color', new Float32BufferAttribute(colors, 4))
+  geometry.setAttribute('color', new Float32BufferAttribute(colors, 3))
   geometry.setIndex(indices)
   return geometry
 }

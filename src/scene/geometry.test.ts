@@ -133,21 +133,21 @@ describe('gradientStrip', () => {
     }
   })
 
-  it('builds one row of vertices per stop with its color and opacity', () => {
+  it('builds one row of vertices per stop in its color', () => {
     const strip = gradientStrip(4, [
       { y: 0, color: new Color(1, 0, 0) },
-      { y: 1, color: new Color(0, 1, 0), opacity: 0.5 },
-      { y: 3, color: new Color(0, 0, 1), opacity: 0 },
+      { y: 1, color: new Color(0, 1, 0) },
+      { y: 3, color: new Color(0, 0, 1) },
     ])
     const position = strip.getAttribute('position')
     const color = strip.getAttribute('color')
     expect(position.count).toBe(6)
-    expect(color.itemSize).toBe(4)
+    expect(color.itemSize).toBe(3)
     expect(strip.getIndex()?.count).toBe(12)
     expect([position.getX(0), position.getX(1)]).toEqual([-2, 2])
     expect(position.getY(4)).toBe(3)
-    expect([color.getX(0), color.getW(0)]).toEqual([1, 1])
-    expect([color.getY(2), color.getW(2)]).toEqual([1, 0.5])
-    expect([color.getZ(5), color.getW(5)]).toEqual([1, 0])
+    expect([color.getX(0), color.getY(0), color.getZ(0)]).toEqual([1, 0, 0])
+    expect([color.getX(2), color.getY(2), color.getZ(2)]).toEqual([0, 1, 0])
+    expect([color.getX(5), color.getY(5), color.getZ(5)]).toEqual([0, 0, 1])
   })
 })

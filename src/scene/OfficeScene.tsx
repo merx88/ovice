@@ -29,14 +29,16 @@ import { Lighting } from './Lighting'
 
 /** The floor and wall are far wider than any viewport shows. */
 const ROOM = { width: 80, wallHeight: 30, floorDepth: 40 } as const
-/** The wall shades towards the floor up to this height, as if lit from above. */
+/**
+ * The wall shades from the page background down to the floor's own color over
+ * this height, as if lit from above. Meeting the floor in its color is what
+ * keeps the wall/floor seam soft: there is no line to see where no shadow falls.
+ */
 const WALL_SHADE_HEIGHT = 1.6
-/** Depth of floor over which the floor blends into the wall, softening the seam. */
-const SEAM_BLEND_DEPTH = 0.45
-/** Gap that keeps overlays (seam blend, wall shadow) from z-fighting the surface under them. */
+/** Gap that keeps the wall's shadow layer from z-fighting the wall. */
 const OVERLAY_GAP = 0.002
-/** How dark the furniture's shadows fall on the wall. */
-const WALL_SHADOW_OPACITY = 0.1
+/** How dark the furniture's shadows fall on the wall; close to how dark they fall on the floor, so they meet at the seam. */
+const WALL_SHADOW_OPACITY = 0.15
 /**
  * A matte floor with a faint, fully blurred mirror image of the furniture.
  * `mirror` takes a little more of the floor's own color away than
@@ -45,7 +47,7 @@ const WALL_SHADOW_OPACITY = 0.1
  */
 const FLOOR_FINISH = {
   roughness: 1,
-  mirror: 0.11,
+  mirror: 0.13,
   mixStrength: 0.1,
   mixBlur: 1,
   blur: [500, 220],
@@ -53,16 +55,11 @@ const FLOOR_FINISH = {
 } as const
 
 const wallColor = new Color(tokens.bg)
-const wallFootColor = new Color(tokens.bg).lerp(new Color(tokens.floor), 0.6)
+const wallFootColor = new Color(tokens.floor)
 const wallGeometry = gradientStrip(ROOM.width, [
   { y: 0, color: wallFootColor },
   { y: WALL_SHADE_HEIGHT, color: wallColor },
   { y: ROOM.wallHeight, color: wallColor },
-])
-/** Lies on the floor with y = 0 at its camera-side edge and y = SEAM_BLEND_DEPTH at the wall. */
-const seamGeometry = gradientStrip(ROOM.width, [
-  { y: 0, color: wallFootColor, opacity: 0 },
-  { y: SEAM_BLEND_DEPTH, color: wallFootColor, opacity: 1 },
 ])
 
 /** Pale, faintly reflective floor meeting a wall in the page's background color. */
@@ -81,13 +78,6 @@ function Room() {
           blur={[...FLOOR_FINISH.blur]}
           resolution={FLOOR_FINISH.resolution}
         />
-      </mesh>
-      <mesh
-        geometry={seamGeometry}
-        rotation={[-Math.PI / 2, 0, 0]}
-        position={[0, OVERLAY_GAP, WALL_Z + SEAM_BLEND_DEPTH]}
-      >
-        <meshBasicMaterial vertexColors transparent depthWrite={false} toneMapped={false} />
       </mesh>
       <mesh geometry={wallGeometry} position={[0, 0, WALL_Z]}>
         <meshBasicMaterial vertexColors toneMapped={false} />
