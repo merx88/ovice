@@ -24,7 +24,9 @@ AI 에이전트가 일하는 과정을 3D 캐릭터로 시각화하는 웹사이
 
 - React + TypeScript + Vite
 - React Three Fiber + drei (3D), Zustand (상태), Vitest (단위 테스트), Playwright (화면 확인)
-- 정적 사이트로 배포 가능 (배포처는 추후 결정). 실제 모드 도입 시 API 키 보관용 작은 백엔드를 별도로 추가한다.
+- 배포: **Vercel**. GitHub 저장소를 Vercel에 연결해 브랜치 푸시마다 미리보기 배포, 기본 브랜치는 프로덕션 배포.
+  Vite 정적 빌드(`dist/`)를 그대로 올리며, 필요 시 `vercel.json`으로 빌드 설정을 명시한다.
+- 실제 모드 도입 시 API 키는 Vercel 서버리스 함수(`api/`)에 환경변수로 보관한다 (별도 서버 불필요).
 
 ## 3. 에셋
 
@@ -166,4 +168,5 @@ public/models/ovice_guy.glb
 ## 10. 범위 밖 (이번에 하지 않음)
 
 실제 AI 연결, 백엔드, 로그인, 여러 오피스/에이전트 전환, Agents/Projects 화면, 알림, 채팅, 파일 첨부,
-모델 선택, 라이브러리 실제 내용, 배포.
+모델 선택, 라이브러리 실제 내용.
+(Vercel 프로젝트 생성·GitHub 연결은 사용자가 Vercel 대시보드에서 직접 한다. 코드 쪽은 Vercel에서 바로 빌드되도록 준비한다.)
