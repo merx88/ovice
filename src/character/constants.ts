@@ -12,3 +12,10 @@ export const BODY_MAX_YAW = Math.PI / 6
 
 /** The head tilts at most 20° up or down towards what it looks at. */
 export const HEAD_MAX_PITCH = (20 * Math.PI) / 180
+
+/**
+ * How far the head turns for a pointer at the left or right edge of the view:
+ * short of the 45° beyond which the body would follow and drag the hands
+ * across the desk.
+ */
+export const LOOK_EDGE_YAW = (38 * Math.PI) / 180

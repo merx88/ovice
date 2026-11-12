@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentStep } from '../store/tasks'
-import { clipAwaitedBy, clipForState, clipSpeedFor, WALK_PACE } from './clipForState'
+import { clipAwaitedBy, clipForState, clipSpeedFor, clipToPlay, WALK_PACE } from './clipForState'
 import { CLIP_NAMES, CLIPS, type ClipName } from './clips'
 import { FIDGETS, initialMachine, transition, type CharMachine, type CharState, type FidgetKind } from './stateMachine'
 
@@ -58,6 +58,30 @@ describe('clipForState', () => {
   it('ignores a fidget left over in any other state', () => {
     expect(clipForState('resting', 'sip', null)).toBe('idle')
     expect(clipForState('working', 'tap', 'searching')).toBe('typing')
+  })
+})
+
+describe('clipToPlay', () => {
+  it('walks back to the chair and sits down once there', () => {
+    expect(clipToPlay('returning', null, null, false)).toBe('walk')
+    expect(clipToPlay('returning', null, null, true)).toBe('sitDown')
+  })
+
+  it('sits down with the clip the way back waits for, so that the character can move on', () => {
+    expect(clipToPlay('returning', null, 'searching', true)).toBe(clipAwaitedBy('returning', null))
+  })
+
+  it('is the clip of the state everywhere else, wherever the character is', () => {
+    for (const state of STATES) {
+      if (state === 'returning') continue
+      for (const fidget of [null, ...FIDGETS]) {
+        for (const step of STEPS) {
+          for (const backAtSeat of [false, true]) {
+            expect(clipToPlay(state, fidget, step, backAtSeat)).toBe(clipForState(state, fidget, step))
+          }
+        }
+      }
+    }
   })
 })
 

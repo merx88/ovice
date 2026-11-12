@@ -1,8 +1,8 @@
 import { MeshReflectorMaterial } from '@react-three/drei'
 import { Suspense } from 'react'
 import { Color } from 'three'
-import { Character, type CharacterProps } from '../character/Character'
-import { CLIP_NAMES } from '../character/clips'
+import { Character } from '../character/Character'
+import { useCharacterDriver } from '../character/useCharacterDriver'
 import { tokens } from '../theme/tokens'
 import { CameraRig } from './CameraRig'
 import { gradientStrip } from './geometry'
@@ -20,11 +20,9 @@ import {
   CUP_POS,
   DESK_POS,
   DRAWER_POS,
-  HANDOFF_POS,
   LAMP_POS,
   LAPTOP_POS,
   SEAT_FACING,
-  SEAT_GROUND_POS,
   SIDE_TABLE_POS,
   SOFA_POS,
   SOFA_YAW,
@@ -95,40 +93,10 @@ function Room() {
   )
 }
 
-// --- TEMPORARY: stand-in for the character driver ---------------------------
-// Shows the character seated and idle until the driver takes over. In
-// development only, the URL can pose it for review: `?clip=<name>`,
-// `?badge=idle|working|done|error`, `?pose=handoff` (standing in front of the
-// desk with the folder) and `?look=x,y,z` (a point to look at).
-const BADGES: readonly CharacterProps['badge'][] = ['idle', 'working', 'done', 'error']
-const noop = () => {}
-
-function previewCharacter(): CharacterProps {
-  const seated: CharacterProps = {
-    clip: 'idle',
-    position: SEAT_GROUND_POS,
-    facing: SEAT_FACING,
-    lookTarget: null,
-    badge: 'idle',
-    holdingFile: false,
-    onClipFinished: noop,
-    onFolderClick: noop,
-  }
-  if (!import.meta.env.DEV) return seated
-  const query = new URLSearchParams(window.location.search)
-  const handoff: Partial<CharacterProps> =
-    query.get('pose') === 'handoff'
-      ? { clip: 'holdFile', position: HANDOFF_POS, facing: SEAT_FACING, badge: 'done', holdingFile: true }
-      : {}
-  const clip = CLIP_NAMES.find((name) => name === query.get('clip'))
-  const badge = BADGES.find((status) => status === query.get('badge'))
-  const look = (query.get('look') ?? '').split(',').map(Number)
-  const lookTarget = look.length === 3 && look.every(Number.isFinite) ? ([look[0], look[1], look[2]] as const) : null
-  return { ...seated, ...handoff, ...(clip && { clip }), ...(badge && { badge }), lookTarget }
+/** The character, moved and animated by its driver. Suspends until its model has loaded. */
+function Resident() {
+  return <Character {...useCharacterDriver()} />
 }
-
-const preview = previewCharacter()
-// --- end of temporary block --------------------------------------------------
 
 /** The whole office: room, lights, camera, every piece of furniture and the character. */
 export function OfficeScene() {
@@ -147,7 +115,7 @@ export function OfficeScene() {
       <CoffeeCup position={[...CUP_POS]} />
       <Laptop position={[...LAPTOP_POS]} />
       <Suspense fallback={null}>
-        <Character {...preview} />
+        <Resident />
       </Suspense>
     </>
   )

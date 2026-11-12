@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { BODY_MAX_YAW, HEAD_MAX_PITCH, HEAD_MAX_YAW } from './constants'
-import { computeLookPitch, computeLookYaw, damp, lookAngles } from './lookAt'
+import { CAMERA, CAMERA_MOBILE, SEAT_GROUND_POS } from '../scene/layout'
+import { BODY_MAX_YAW, HEAD_MAX_PITCH, HEAD_MAX_YAW, LOOK_EDGE_YAW } from './constants'
+import { computeLookPitch, computeLookYaw, damp, lookAngles, lookPlaneDistance } from './lookAt'
 
 describe('computeLookYaw', () => {
   it('turns only the head for small angles', () => {
@@ -80,5 +81,50 @@ describe('damp', () => {
 
   it('stays put with no time step', () => {
     expect(damp(0.4, 1, 8, 0)).toBe(0.4)
+  })
+})
+
+describe('lookPlaneDistance', () => {
+  it('puts the plane where the edge of the view is the asked angle to the side', () => {
+    const cameraDistance = 9
+    const viewHalfWidth = 0.3
+    const edgeYaw = Math.PI / 5
+    const distance = lookPlaneDistance(cameraDistance, viewHalfWidth, edgeYaw)
+    const halfWidthAtPlane = (cameraDistance - distance) * viewHalfWidth
+    expect(Math.atan2(halfWidthAtPlane, distance)).toBeCloseTo(edgeYaw)
+    // The same thing through the look-at maths: a target on the plane's edge, seen from the character.
+    expect(lookAngles([0, 1, 0], 0, [halfWidthAtPlane, 1, distance]).yaw).toBeCloseTo(edgeYaw)
+  })
+
+  it('stands the plane between the character and the camera', () => {
+    for (const viewHalfWidth of [0.05, 0.3, 1.5]) {
+      const distance = lookPlaneDistance(9, viewHalfWidth, LOOK_EDGE_YAW)
+      expect(distance).toBeGreaterThan(0)
+      expect(distance).toBeLessThan(9)
+    }
+  })
+
+  it('moves the plane closer for a narrower view, so the edge keeps its angle', () => {
+    const wide = lookPlaneDistance(9, 0.3, LOOK_EDGE_YAW)
+    const narrow = lookPlaneDistance(9, 0.15, LOOK_EDGE_YAW)
+    expect(narrow).toBeLessThan(wide)
+  })
+
+  it.each([
+    ['desktop', CAMERA],
+    ['mobile', CAMERA_MOBILE],
+  ])('keeps a pointer at the edge of the %s view from turning the body', (_, camera) => {
+    expect(LOOK_EDGE_YAW).toBeLessThan(HEAD_MAX_YAW)
+    const seatZ = SEAT_GROUND_POS[2]
+    const viewHalfWidth = Math.tan((camera.fov * Math.PI) / 360) * camera.aspect
+    const distance = lookPlaneDistance(camera.position[2] - seatZ, viewHalfWidth, LOOK_EDGE_YAW)
+    const halfWidthAtPlane = (camera.position[2] - seatZ - distance) * viewHalfWidth
+    for (const side of [-1, 1]) {
+      // The camera is not straight in front of the seat, which shifts the edges by a few degrees.
+      const edge = [camera.position[0] + side * halfWidthAtPlane, 1, seatZ + distance] as const
+      const { yaw } = lookAngles([SEAT_GROUND_POS[0], 1, seatZ], 0, edge)
+      expect(Math.abs(yaw)).toBeGreaterThan((30 * Math.PI) / 180)
+      expect(computeLookYaw(yaw).body).toBe(0)
+    }
   })
 })

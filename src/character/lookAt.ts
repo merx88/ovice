@@ -39,6 +39,18 @@ export function lookAngles(eye: Vec3, facing: number, target: Vec3): { yaw: numb
   return { yaw, pitch }
 }
 
+/**
+ * How far in front of the character (m) to stand the upright plane that the
+ * pointer is projected onto, so that a pointer at the left or right edge of
+ * the view is `edgeYaw` to the character's side. `cameraDistance` is how far
+ * in front of the character the camera is, and `viewHalfWidth` half the width
+ * of the view one metre from the camera.
+ */
+export function lookPlaneDistance(cameraDistance: number, viewHalfWidth: number, edgeYaw: number): number {
+  // At the plane the view is as wide as the camera is far from it; that width has to be the plane's distance times tan(edgeYaw).
+  return (cameraDistance * viewHalfWidth) / (Math.tan(edgeYaw) + viewHalfWidth)
+}
+
 /** Moves `current` towards `goal`, covering a fraction of the gap that depends on `rate` (1/s) and the time step. */
 export function damp(current: number, goal: number, rate: number, deltaSeconds: number): number {
   return current + (goal - current) * (1 - Math.exp(-rate * deltaSeconds))

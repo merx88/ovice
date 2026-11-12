@@ -22,26 +22,36 @@ import { advancePlayback, createPlayback, MAX_STEP } from './playback'
 import { applyPose, applyRest, createRig, MODEL_URL, setEyeOpenness, turnBone, type Rig } from './rig'
 import { StatusBadge, type BadgeStatus } from './StatusBadge'
 
-export interface CharacterProps {
-  /** The animation to play. Changing it cross-fades from whatever pose the body is in. */
-  clip: ClipName
+/** Where the character is and which way it faces. */
+export interface CharacterPlacement {
   /**
    * The point on the ground under the character: between its feet when it
    * stands, under its hips when it sits. A y above 0 lifts the character off
-   * the floor; its shadow stays on the floor. Read every frame, so whoever
-   * moves the character may also do so by changing the tuple in place.
+   * the floor; its shadow stays on the floor.
    */
-  position: Vec3
+  position: [number, number, number]
   /** Yaw in radians about +y; 0 faces +z. */
   facing: number
-  /** A point in world space to look at, or null to look straight ahead. */
+}
+
+export interface CharacterProps {
+  /** The animation to play. Changing it cross-fades from whatever pose the body is in. */
+  clip: ClipName
+  /** How fast the clip plays, 1 (the default) being the pace it was written at. */
+  clipSpeed?: number
+  /**
+   * Read every frame: whoever moves the character keeps one object and
+   * changes its numbers in place, without rendering.
+   */
+  placement: CharacterPlacement
+  /** A point in world space to look at, or null to look straight ahead. Read every frame, like `placement`. */
   lookTarget: Vec3 | null
   /** The status icon above the head. */
   badge: BadgeStatus
   /** Shows the result folder between the hands. */
   holdingFile: boolean
-  /** Called once each time a clip of finite length has played to its end. */
-  onClipFinished(): void
+  /** Called once each time a clip of finite length has played to its end, with the name of that clip. */
+  onClipFinished(clip: ClipName): void
   onFolderClick(): void
 }
 
@@ -153,9 +163,10 @@ export function Character(props: CharacterProps) {
   useEffect(() => {
     // A clip that came with the model reports its own end.
     const onFinished = (event: { action: AnimationAction }) => {
-      if (event.action !== animation.action || animation.playback.finished) return
-      animation.playback.finished = true
-      latest.current.onClipFinished()
+      const { playback } = animation
+      if (event.action !== animation.action || playback.finished || playback.name === null) return
+      playback.finished = true
+      latest.current.onClipFinished(playback.name)
     }
     mixer.addEventListener('finished', onFinished)
     return () => {
@@ -167,7 +178,8 @@ export function Character(props: CharacterProps) {
 
   useFrame((_, delta) => {
     if (!body.current) return
-    const { clip, position, facing, lookTarget, onClipFinished } = latest.current
+    const { clip, clipSpeed = 1, placement, lookTarget, onClipFinished } = latest.current
+    const { position, facing } = placement
     const step = Math.min(delta, MAX_STEP)
     const state = animation
 
@@ -177,7 +189,7 @@ export function Character(props: CharacterProps) {
     // --- The clip's own pose ----------------------------------------------
     const resolved = resolveClip(clip, rig.clips)
     const duration = resolved.kind === 'procedural' ? resolved.clip.duration : null
-    const { started, justFinished, fadeWeight } = advancePlayback(state.playback, clip, step, duration)
+    const { started, justFinished, fadeWeight } = advancePlayback(state.playback, clip, step, duration, clipSpeed)
     if (started) {
       copyTransforms(state.shown, state.fadeFrom)
       state.action?.stop()
@@ -199,7 +211,7 @@ export function Character(props: CharacterProps) {
     } else {
       // The mixer only writes a bone when its value changes, so hand the bones back as it left them.
       writeBones(rig, state.mixed)
-      mixer.update(started ? 0 : step)
+      mixer.update(started ? 0 : step * clipSpeed)
       readBones(rig, state.mixed)
     }
 
@@ -256,7 +268,7 @@ export function Character(props: CharacterProps) {
       folder.current.position.copy(body.current.worldToLocal(scratchVector)).add(FOLDER_OFFSET)
     }
 
-    if (justFinished) onClipFinished()
+    if (justFinished) onClipFinished(clip)
   })
 
   return (

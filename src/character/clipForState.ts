@@ -45,6 +45,20 @@ export function clipForState(state: CharState, fidget: FidgetKind | null, step: 
 }
 
 /**
+ * The clip to play: `clipForState`, with the one thing it cannot know filled
+ * in. `backAtSeat` says whether a character on its way back has reached its
+ * chair, which is where it stops walking and sits down.
+ */
+export function clipToPlay(
+  state: CharState,
+  fidget: FidgetKind | null,
+  step: AgentStep | null,
+  backAtSeat: boolean,
+): ClipName {
+  return state === 'returning' && backAtSeat ? 'sitDown' : clipForState(state, fidget, step)
+}
+
+/**
  * The clip whose end lets the character leave `state`, or null for a state
  * that is left by something else. The end of any other clip means nothing to
  * the state: it belongs to a state the character has already left.
