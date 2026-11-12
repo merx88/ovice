@@ -82,9 +82,11 @@ export function badgeForState(state: CharState, queued: Queued): BadgeStatus {
 /**
  * The bubble starts beside the top of the hood, to the right of the badge as
  * the camera sees it: this far (m) towards +x from the middle of the
- * character, and this far above the top of its head.
+ * character, and this far above the top of its head. Measured on the
+ * reference screens, where the bubble's left edge is level with the edge of
+ * the hood and its middle a little higher than the hood's top.
  */
-const BUBBLE_OFFSET = { right: 0.3, up: 0.02 } as const
+const BUBBLE_OFFSET = { right: 0.3, up: 0.08 } as const
 
 /**
  * How far (m) the character's body is above where it would be standing: the
@@ -112,8 +114,8 @@ export function bubbleLift(state: CharState, sitting: boolean): number {
 
 /**
  * The bubble's anchor in world space for a character on the ground point
- * `position` whose body is `lift` above standing: the point where the left
- * edge of the bubble goes, level with the top of the hood. Written into
+ * `position` whose body is `lift` above standing: the point the left edge of
+ * the bubble starts from, at the height of the bubble's middle. Written into
  * `into` when given, so that one tuple can follow the character.
  */
 export function bubbleAnchorAt(

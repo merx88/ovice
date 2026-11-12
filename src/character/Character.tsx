@@ -65,6 +65,12 @@ const BADGE_ABOVE_HEAD = 0.66
 const PALM_ALONG_HAND = 0.07
 /** Where the folder sits relative to the point midway between the palms (m, character space). */
 const FOLDER_OFFSET = new Vector3(0, 0.03, 0.06)
+/**
+ * The folder shows once a change of clip has blended in this far (0..1). Until
+ * then the hands are still on their way to where they hold it, and the folder
+ * between them would be inside the body.
+ */
+const FOLDER_SHOWS_FROM = 0.7
 /** The soft shadow on the floor (y = 0) under the character; `lift` keeps it from flickering against the floor. */
 const GROUND_SHADOW = { diameter: 1.05, opacity: 0.34, lift: 0.006 } as const
 
@@ -260,6 +266,7 @@ export function Character(props: CharacterProps) {
     badgeAnchor.current?.position.copy(state.head).setY(state.head.y + BADGE_ABOVE_HEAD)
     shadow.current?.position.set(position[0], GROUND_SHADOW.lift, position[2])
     if (folder.current) {
+      folder.current.visible = fadeWeight >= FOLDER_SHOWS_FROM
       scratchVector.set(0, 0, 0)
       for (const hand of [rig.byName['arm_L.003'].bone, rig.byName['arm_R.003'].bone]) {
         hand.updateWorldMatrix(true, false)

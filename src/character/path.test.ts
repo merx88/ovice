@@ -315,8 +315,9 @@ describe('stepWalker', () => {
     // The turn began before the last step, but only as far as it could while still walking forwards.
     expect(facingOneStepShort).toBeGreaterThan(QUARTER / 4)
     expect(facingOneStepShort).toBeLessThanOrEqual(QUARTER / 2)
-    expect(Math.abs(turnBetween(walker.facing, QUARTER))).toBeLessThan(0.15)
-    // Left alone at the goal it finishes the turn exactly.
+    // It reports arriving with the last few degrees of the turn still to go...
+    expect(Math.abs(turnBetween(walker.facing, QUARTER))).toBeLessThan(0.26)
+    // ...and left alone at the goal it finishes the turn exactly.
     for (let frame = 0; frame < 60; frame++) stepWalker(walker, straight, 6, QUARTER, SPEED, FRAME)
     expect(walker.facing).toBe(QUARTER)
   })
@@ -402,13 +403,13 @@ describe('the walk round the desk', () => {
     expect(out).toBeGreaterThan(3.2)
     expect(out).toBeLessThan(3.8)
     expect(walker.distance).toBe(route.length)
-    expect(Math.abs(turnBetween(walker.facing, HANDOFF_FACING))).toBeLessThan(0.11)
+    expect(Math.abs(turnBetween(walker.facing, HANDOFF_FACING))).toBeLessThan(0.26)
 
     const back = walkTo(walker, 0, SEAT_FACING).seconds
     expect(back).toBeGreaterThan(3.2)
     expect(back).toBeLessThan(3.8)
     expect(walker.distance).toBe(0)
-    expect(Math.abs(turnBetween(walker.facing, SEAT_FACING))).toBeLessThan(0.11)
+    expect(Math.abs(turnBetween(walker.facing, SEAT_FACING))).toBeLessThan(0.26)
   })
 
   it.each([

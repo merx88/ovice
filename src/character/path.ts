@@ -166,8 +166,12 @@ const SLOW_DOWN = { distance: 0.3, least: 0.35 } as const
  * arrival, as far as it may while still moving; it finishes the turn standing.
  */
 const TURN_IN_DISTANCE = 0.4
-/** It has arrived once it stands at its goal and faces within this (radians) of where it should. */
-const ARRIVED_WITHIN = 0.1
+/**
+ * It has arrived once it stands at its goal and faces within this (radians) of
+ * where it should: the last of a turn is slow, and whatever comes next need
+ * not wait for it.
+ */
+const ARRIVED_WITHIN = 0.25
 
 /** The signed turn (radians) that takes yaw `from` to yaw `to` the short way round. */
 export function turnBetween(from: number, to: number): number {

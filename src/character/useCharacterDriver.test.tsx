@@ -436,7 +436,8 @@ describe('useCharacterDriver', () => {
       expect(walked).toBeLessThan(3.8)
       expect(signals().charState).toBe('returning')
       expect(stage.props().placement.position).toEqual([...SEAT_GROUND_POS])
-      expect(Math.abs(stage.props().placement.facing - SEAT_FACING)).toBeLessThan(0.11)
+      // Turned to the desk but for the last few degrees, which it finishes as it sits down.
+      expect(Math.abs(stage.props().placement.facing - SEAT_FACING)).toBeLessThan(0.26)
 
       const sat = stage.untilState('resting')
       expect(sat).toBeCloseTo(CLIPS.sitDown.duration as number, 1)

@@ -10,8 +10,8 @@ import { SEAT_GROUND_POS } from '../scene/layout'
 
 /**
  * Where the speech bubble goes, in world space: the point its left edge
- * starts from, level with the top of the character's hood and to the right of
- * the badge as the camera sees it.
+ * starts from, at the height of its middle. That is beside the top of the
+ * character's hood, to the right of the badge as the camera sees it.
  *
  * This is one object for the lifetime of the store. The driver changes the
  * numbers of `current` in place on every frame and nobody is told, so read it
