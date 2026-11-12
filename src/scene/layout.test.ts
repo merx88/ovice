@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   CAMERA,
   CAMERA_MOBILE,
+  CHAIR_POS,
   CHARACTER_HEIGHT,
   DESK_BOUNDS,
   DESK_SIZE,
@@ -9,6 +10,7 @@ import {
   HANDOFF_POS,
   LAPTOP_POS,
   SEAT_FACING,
+  SEAT_GROUND_POS,
   SEAT_POS,
   cameraFor,
   fovForAspect,
@@ -47,6 +49,22 @@ describe('layout', () => {
     const facingZ = Math.cos(SEAT_FACING)
     const towardsCameraZ = Math.sign(CAMERA.position[Z] - SEAT_POS[Z])
     expect(facingZ * towardsCameraZ).toBeCloseTo(1)
+  })
+
+  it('gives the floor point under the seated hips', () => {
+    expect(SEAT_GROUND_POS).toEqual([SEAT_POS[X], 0, SEAT_POS[Z]])
+  })
+
+  it('seats the character far enough back for its round body to clear the desk', () => {
+    // The body is about half as deep as the character is tall.
+    const bodyHalfDepth = CHARACTER_HEIGHT * 0.24
+    expect(SEAT_POS[Z] + bodyHalfDepth).toBeLessThan(DESK_BOUNDS.min[Z])
+  })
+
+  it('stands the chair behind the seated hips, in line with them', () => {
+    expect(CHAIR_POS[X]).toBe(SEAT_POS[X])
+    expect(CHAIR_POS[Y]).toBe(0)
+    expect(CHAIR_POS[Z]).toBeLessThan(SEAT_POS[Z])
   })
 
   it('rests the laptop on the desktop in front of the seat', () => {

@@ -9,3 +9,6 @@ export const HEAD_MAX_YAW = Math.PI / 4
 
 /** The body turns at most 30° to either side. */
 export const BODY_MAX_YAW = Math.PI / 6
+
+/** The head tilts at most 20° up or down towards what it looks at. */
+export const HEAD_MAX_PITCH = (20 * Math.PI) / 180

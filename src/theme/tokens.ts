@@ -14,6 +14,8 @@ export const tokens = {
   pink: '#F7D9D7',
   white: '#FFFFFF',
   danger: '#E5393B',
+  // The status badge while the agent is working.
+  badgeYellow: '#D8C168',
   // Small props in the office scene (books, plants, laptop).
   plantGreen: '#5F8A2B',
   bookOlive: '#A5AD82',

@@ -10,15 +10,20 @@ const PARALLAX_RANGE = 0.15
 const PARALLAX_EASE = 3
 
 /**
- * Temporary review aid: `?cam=bookshelf|desk|sofa` moves the camera in for a
- * close-up screenshot of one area. Not part of the product.
+ * Temporary review aid, in development only: `?cam=<name>` moves the camera in
+ * for a close-up screenshot of one area. Not part of the product.
  */
 const CLOSEUPS: Record<string, CameraSpec> = {
   bookshelf: { position: [-1.55, 1.25, 3.2], target: [-2.03, 0.9, -1.2], fov: 28, aspect: 1 },
   desk: { position: [0.3, 1.5, 4.6], target: [0, 0.55, -0.2], fov: 30, aspect: 1.5 },
   sofa: { position: [1.5, 1.2, 3.4], target: [2.1, 0.45, -0.4], fov: 28, aspect: 1.2 },
+  // The character: seated from the front and the side, handing over from the front and the side.
+  seat: { position: [0.1, 1.5, 3.6], target: [0.05, 0.85, -0.6], fov: 26, aspect: 1 },
+  seatSide: { position: [1.28, 0.85, -0.62], target: [0.05, 0.75, -0.55], fov: 62, aspect: 1 },
+  handoff: { position: [0.6, 1.3, 4.6], target: [0.05, 0.65, 1], fov: 26, aspect: 1 },
+  handoffSide: { position: [1.9, 0.75, 1.15], target: [0.05, 0.6, 1.05], fov: 42, aspect: 1 },
 }
-const closeup = CLOSEUPS[new URLSearchParams(window.location.search).get('cam') ?? '']
+const closeup = import.meta.env.DEV ? CLOSEUPS[new URLSearchParams(window.location.search).get('cam') ?? ''] : undefined
 
 /**
  * Holds the fixed front view, picks the mobile framing on narrow viewports and

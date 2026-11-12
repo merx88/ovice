@@ -6,6 +6,7 @@ describe('tokens', () => {
   it('defines exactly the agreed color keys', () => {
     expect(Object.keys(tokens).sort()).toEqual(
       [
+        'badgeYellow',
         'bg',
         'black',
         'bookBlue',

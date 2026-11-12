@@ -28,7 +28,7 @@ export const DESK_BOUNDS = {
 // --- Character anchors ------------------------------------------------------
 
 /** Standing height the character model is scaled to. */
-export const CHARACTER_HEIGHT = 1.25
+export const CHARACTER_HEIGHT = 1.2
 
 /** Height of the chair's seat surface. */
 export const SEAT_HEIGHT = 0.41
@@ -36,10 +36,23 @@ export const SEAT_HEIGHT = 0.41
 /** The chair sits slightly right of the desk centre, as in the reference. */
 const SEAT_X = 0.05
 
-export const CHAIR_POS = [SEAT_X, 0, -0.5] as const
+/**
+ * Where the seated character's hips rest on the seat. The character's body is
+ * about 0.6 m deep and sits lower than the desktop, so the seat is this far
+ * behind the desk's back edge to keep the belly out of the desk.
+ */
+export const SEAT_POS = [SEAT_X, SEAT_HEIGHT, -0.71] as const
 
-/** Where the seated character's hip goes. */
-export const SEAT_POS = [SEAT_X, SEAT_HEIGHT, -0.58] as const
+/** The floor under the seated character: the `position` to give it while it sits. */
+export const SEAT_GROUND_POS = [SEAT_POS[0], 0, SEAT_POS[2]] as const
+
+/**
+ * The character perches on the front edge of the seat (its legs are too
+ * short to bend over it), so the chair stands this far behind the hips.
+ */
+const CHAIR_BEHIND_SEAT = 0.42
+
+export const CHAIR_POS = [SEAT_X, 0, SEAT_POS[2] - CHAIR_BEHIND_SEAT] as const
 
 /** Yaw (radians, about +y) of the seated character: 0 faces +z, the camera. */
 export const SEAT_FACING = 0
@@ -48,7 +61,7 @@ export const SEAT_FACING = 0
 export const HANDOFF_POS = [SEAT_X, 0, 1] as const
 
 /** Centre of the laptop's base, resting on the desktop in front of the seat. */
-export const LAPTOP_POS = [SEAT_X, DESK_TOP_Y, -0.1] as const
+export const LAPTOP_POS = [SEAT_X, DESK_TOP_Y, -0.16] as const
 
 // --- Furniture and props ----------------------------------------------------
 
