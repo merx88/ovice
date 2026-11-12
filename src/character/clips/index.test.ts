@@ -1,7 +1,9 @@
 import { AnimationClip } from 'three'
 import { describe, expect, it } from 'vitest'
 import { BONE_NAMES, CLIP_NAMES, CLIPS, resolveClip, type ClipName, type Pose } from './index'
+import { HANDOFF_POS, SEAT_GROUND_POS } from '../../scene/layout'
 import { seatedBase, standingBase } from './shared'
+import { WALK_SPEED } from './walk'
 
 const ALL_CLIPS: ClipName[] = [
   'idle',
@@ -115,6 +117,11 @@ describe('clip registry', () => {
   it('lifts the seated body onto the seat and leaves the standing body on the ground', () => {
     expect(seatedBase['root 1']?.pos?.[1]).toBeGreaterThan(0.05)
     expect(standingBase['root 1']?.pos?.[1] ?? 0).toBe(0)
+  })
+
+  it('walks at a speed that takes it from the seat to the hand-off spot in about 1.6 s', () => {
+    const distance = Math.hypot(HANDOFF_POS[0] - SEAT_GROUND_POS[0], HANDOFF_POS[2] - SEAT_GROUND_POS[2])
+    expect(distance / WALK_SPEED).toBeCloseTo(1.6, 1)
   })
 
   it.each(['wave', 'sip', 'stretch', 'lookAround', 'tap', 'scratchHead'] as const)(
