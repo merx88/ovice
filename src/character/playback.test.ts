@@ -68,6 +68,47 @@ describe('advancePlayback', () => {
     expect(advancePlayback(playback, 'wave', FRAME, 2.2).fadeWeight).toBe(1)
   })
 
+  it('runs the clip faster or slower by the speed given', () => {
+    const fast = createPlayback()
+    advancePlayback(fast, 'walk', FRAME, null, 1.5)
+    for (let frame = 0; frame < 60; frame++) advancePlayback(fast, 'walk', FRAME, null, 1.5)
+    expect(fast.time).toBeCloseTo(1.5)
+
+    const slow = createPlayback()
+    advancePlayback(slow, 'walk', FRAME, null, 0.5)
+    for (let frame = 0; frame < 60; frame++) advancePlayback(slow, 'walk', FRAME, null, 0.5)
+    expect(slow.time).toBeCloseTo(0.5)
+  })
+
+  it('ends a finite clip sooner the faster it runs', () => {
+    const playback = createPlayback()
+    let finishes = 0
+    let seconds = 0
+    while (finishes === 0 && seconds < 5) {
+      if (advancePlayback(playback, 'wave', FRAME, 2.2, 2).justFinished) finishes++
+      seconds += FRAME
+    }
+    expect(seconds).toBeCloseTo(1.1, 1)
+    // Still reported once only.
+    for (let frame = 0; frame < 120; frame++) if (advancePlayback(playback, 'wave', FRAME, 2.2, 2).justFinished) finishes++
+    expect(finishes).toBe(1)
+  })
+
+  it('takes the same time over the cross-fade whatever the speed', () => {
+    const playback = createPlayback()
+    advancePlayback(playback, 'idle', FRAME, null)
+    expect(advancePlayback(playback, 'walk', FRAME, null, 3).fadeWeight).toBe(0)
+    expect(advancePlayback(playback, 'walk', CROSS_FADE / 2, null, 3).fadeWeight).toBeCloseTo(0.5)
+    expect(advancePlayback(playback, 'walk', CROSS_FADE / 2, null, 3).fadeWeight).toBeCloseTo(1)
+  })
+
+  it('plays at its own pace when no speed is given', () => {
+    const playback = createPlayback()
+    advancePlayback(playback, 'walk', FRAME, null)
+    advancePlayback(playback, 'walk', 0.25, null)
+    expect(playback.time).toBeCloseTo(0.25)
+  })
+
   it('starts a fresh fade when the clip changes again midway', () => {
     const playback = createPlayback()
     play(playback, 'idle', null, 1)

@@ -60,6 +60,27 @@ export const SEAT_FACING = 0
 /** Where the character stands, in front of the desk, to hand over the file. */
 export const HANDOFF_POS = [SEAT_X, 0, 1] as const
 
+/** Yaw of the character while it hands the file over: towards the camera. */
+export const HANDOFF_FACING = 0
+
+/** Half the width of the character's round body, which is what has to fit past the furniture. */
+export const CHARACTER_BODY_RADIUS = 0.31
+
+/**
+ * The way from the seat to the hand-off spot, as ground points: along the
+ * back of the desk, round its left end (the gap to the sofa on the right is
+ * too narrow) and across its front. The way back is the same in reverse.
+ */
+export const WALK_OUT_PATH: readonly Vec3[] = [
+  SEAT_GROUND_POS,
+  [-1.75, 0, -0.75],
+  [-1.75, 0, HANDOFF_POS[2]],
+  HANDOFF_POS,
+]
+
+/** The corners of the walk are rounded to arcs of this radius, so the character turns as it goes. */
+export const WALK_CORNER_RADIUS = 0.5
+
 /** Centre of the laptop's base, resting on the desktop in front of the seat. */
 export const LAPTOP_POS = [SEAT_X, DESK_TOP_Y, -0.16] as const
 

@@ -16,7 +16,7 @@ export const MAX_STEP = 0.1
 export interface Playback {
   /** The clip being played, or null before the first frame. */
   name: ClipName | null
-  /** Seconds since the clip started. */
+  /** How far into the clip playback is, in seconds of the clip. */
   time: number
   /** True once a finite clip has reached its end (or the model's own clip reported so). */
   finished: boolean
@@ -43,9 +43,17 @@ function ease(value: number): number {
 
 /**
  * Moves playback on by `step` seconds with `clip` requested. `duration` is the
- * clip's length, or null when it loops or reports its own end.
+ * clip's length, or null when it loops or reports its own end. `speed` is how
+ * fast the clip runs, 1 being its own pace; the cross-fade always takes the
+ * same time.
  */
-export function advancePlayback(playback: Playback, clip: ClipName, step: number, duration: number | null): PlaybackFrame {
+export function advancePlayback(
+  playback: Playback,
+  clip: ClipName,
+  step: number,
+  duration: number | null,
+  speed = 1,
+): PlaybackFrame {
   const started = clip !== playback.name
   if (started) {
     // The very first clip has no earlier pose to fade from.
@@ -54,7 +62,7 @@ export function advancePlayback(playback: Playback, clip: ClipName, step: number
     playback.time = 0
     playback.finished = false
   } else {
-    playback.time += step
+    playback.time += step * speed
     playback.fade = Math.min(1, playback.fade + step / CROSS_FADE)
   }
   const justFinished = duration !== null && !playback.finished && playback.time >= duration
