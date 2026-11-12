@@ -1,0 +1,100 @@
+// World-space layout of the office, in metres.
+// Convention: +x right, +y up, +z towards the camera; the floor is y = 0 and
+// the desk is centred on the origin. Positions are `[x, y, z]` tuples.
+
+export type Vec3 = readonly [number, number, number]
+
+export interface CameraSpec {
+  position: Vec3
+  target: Vec3
+  /** Vertical field of view in degrees at `aspect` and on wider viewports. */
+  fov: number
+  /** Viewport aspect the framing was designed for; see `fovForAspect`. */
+  aspect: number
+}
+
+// --- Desk -------------------------------------------------------------------
+
+export const DESK_SIZE = { width: 2.4, depth: 0.8, height: 0.58, thickness: 0.1 } as const
+export const DESK_POS = [0, 0, 0] as const
+export const DESK_TOP_Y = DESK_POS[1] + DESK_SIZE.height
+
+/** Axis-aligned box the desk occupies. */
+export const DESK_BOUNDS = {
+  min: [DESK_POS[0] - DESK_SIZE.width / 2, DESK_POS[1], DESK_POS[2] - DESK_SIZE.depth / 2],
+  max: [DESK_POS[0] + DESK_SIZE.width / 2, DESK_TOP_Y, DESK_POS[2] + DESK_SIZE.depth / 2],
+} as const satisfies { min: Vec3; max: Vec3 }
+
+// --- Character anchors ------------------------------------------------------
+
+/** Standing height the character model is scaled to. */
+export const CHARACTER_HEIGHT = 1.25
+
+/** Height of the chair's seat surface. */
+export const SEAT_HEIGHT = 0.41
+
+/** The chair sits slightly right of the desk centre, as in the reference. */
+const SEAT_X = 0.05
+
+export const CHAIR_POS = [SEAT_X, 0, -0.5] as const
+
+/** Where the seated character's hip goes. */
+export const SEAT_POS = [SEAT_X, SEAT_HEIGHT, -0.58] as const
+
+/** Yaw (radians, about +y) of the seated character: 0 faces +z, the camera. */
+export const SEAT_FACING = 0
+
+/** Where the character stands, in front of the desk, to hand over the file. */
+export const HANDOFF_POS = [SEAT_X, 0, 1] as const
+
+/** Centre of the laptop's base, resting on the desktop in front of the seat. */
+export const LAPTOP_POS = [SEAT_X, DESK_TOP_Y, -0.1] as const
+
+// --- Furniture and props ----------------------------------------------------
+
+export const WALL_Z = -1.8
+
+export const BOOKSHELF_POS = [-2.03, 0, -1.32] as const
+/** The bookshelf and sofa are turned a little to face the camera. */
+export const BOOKSHELF_YAW = 0.19
+export const DRAWER_POS = [-0.74, 0, 0.08] as const
+export const SOFA_POS = [2.04, 0, -0.55] as const
+export const SOFA_YAW = -0.2
+export const SIDE_TABLE_POS = [2.2, 0, 0.3] as const
+export const LAMP_POS = [-0.74, DESK_TOP_Y, -0.08] as const
+export const CUP_POS = [0.62, DESK_TOP_Y, -0.05] as const
+
+// --- Cameras ----------------------------------------------------------------
+
+/** Viewports narrower than this (CSS px) use `CAMERA_MOBILE`. */
+export const MOBILE_BREAKPOINT = 768
+
+/** Front view framing the whole room: bookshelf left, desk centre, sofa right. */
+export const CAMERA: CameraSpec = {
+  position: [0.14, 1.67, 8.9],
+  target: [0.14, 0.76, 0],
+  fov: 22,
+  aspect: 1728 / 1117,
+}
+
+/** Pulled-back portrait view that keeps the desk and chair fully in frame. */
+export const CAMERA_MOBILE: CameraSpec = {
+  position: [SEAT_X, 1.9, 11],
+  target: [SEAT_X, 0.35, 0],
+  fov: 32,
+  aspect: 390 / 844,
+}
+
+export function cameraFor(viewportWidth: number): CameraSpec {
+  return viewportWidth < MOBILE_BREAKPOINT ? CAMERA_MOBILE : CAMERA
+}
+
+/**
+ * Vertical fov (degrees) to use at `aspect`: the designed fov, widened on
+ * viewports narrower than the design so the same horizontal extent stays in view.
+ */
+export function fovForAspect(camera: CameraSpec, aspect: number): number {
+  if (aspect >= camera.aspect) return camera.fov
+  const halfHeight = Math.tan((camera.fov * Math.PI) / 360)
+  return (Math.atan((halfHeight * camera.aspect) / aspect) * 360) / Math.PI
+}

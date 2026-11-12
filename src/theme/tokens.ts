@@ -14,4 +14,11 @@ export const tokens = {
   pink: '#F7D9D7',
   white: '#FFFFFF',
   danger: '#E5393B',
+  // Small props in the office scene (books, plants, laptop).
+  plantGreen: '#5F8A2B',
+  bookOlive: '#A5AD82',
+  bookRed: '#FB5E45',
+  bookBlue: '#4F80CB',
+  navy: '#263768',
+  laptopGray: '#B5B4B6',
 } as const
