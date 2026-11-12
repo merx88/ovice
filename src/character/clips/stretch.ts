@@ -3,7 +3,7 @@ import { add, arms, hold, mix, seatedBase, TAU, type ArmPose, type Pose, type Pr
 const DURATION = 3
 
 /** Both arms thrown up and out. */
-const ARM_UP: ArmPose = { upper: [-1.31, -0.81, 0.28], fore: [-0.41, -0.55, -0.26], hand: [0.06, -0.01, 0.08] }
+const ARM_UP: ArmPose = { upper: [1.63, 0.94, -0.07], fore: [-0.09, 0.47, 0.01], hand: [0, -0.07, 0] }
 
 const stretched: Pose = add({ ...seatedBase, ...arms(ARM_UP) }, {
   body: { rot: [-0.3, 0, 0] },
