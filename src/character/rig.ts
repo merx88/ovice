@@ -159,8 +159,10 @@ function inPoseOrder(joints: RigJoint[]): RigJoint[] {
 
 /**
  * Reads the skeleton out of `model`, which must be in its rest pose, and
- * scales the character to `height` metres. Bones are assumed unscaled, as
- * they are in the model.
+ * scales the character to `height` metres. Two things are taken as given,
+ * because they hold for the model: bones are unscaled, and the armature node
+ * the root bone hangs from is not rotated, so that its axes are the
+ * character's (+x left, +y up, +z forward).
  */
 export function buildRig(model: Object3D, clips: AnimationClip[], height: number): Rig {
   model.updateWorldMatrix(true, true)

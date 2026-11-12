@@ -64,8 +64,9 @@ const buttonStyle: CSSProperties = {
   cursor: 'pointer',
 }
 
-function setCursor(cursor: string) {
-  document.body.style.cursor = cursor
+/** Shows the hand cursor while the pointer is over the folder, and whatever the page uses otherwise. */
+function showHandCursor(over: boolean) {
+  document.body.style.cursor = over ? 'pointer' : ''
 }
 
 /**
@@ -84,7 +85,7 @@ export const Folder = forwardRef<Group, FolderProps>(function Folder({ onClick }
   const buttonAt = useMemo(() => new Vector3(Infinity, Infinity, Infinity), [])
 
   useImperativeHandle(ref, () => group.current as Group, [])
-  useEffect(() => () => setCursor('auto'), [])
+  useEffect(() => () => showHandCursor(false), [])
 
   useFrame(() => {
     if (!group.current || !button.current) return
@@ -105,8 +106,8 @@ export const Folder = forwardRef<Group, FolderProps>(function Folder({ onClick }
         ref={group}
         rotation={[TILT, 0, 0]}
         onClick={handleClick}
-        onPointerOver={() => setCursor('pointer')}
-        onPointerOut={() => setCursor('auto')}
+        onPointerOver={() => showHandCursor(true)}
+        onPointerOut={() => showHandCursor(false)}
       >
         <mesh geometry={backGeometry} material={blue} position={[0, 0, -coverZ]} castShadow />
         <mesh
