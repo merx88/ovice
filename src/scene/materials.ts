@@ -9,12 +9,12 @@ import { tokens } from '../theme/tokens'
  */
 const FINISH = {
   /** The bookshelf's frame. */
-  chrome: { roughness: 0.3 },
+  chrome: { roughness: 0.375 },
   /** The inflated armchair. */
-  silver: { roughness: 0.38 },
-  /** Toy plastic: a satin body under a thin, soft coat. */
-  glossy: { roughness: 0.5, clearcoat: 0.3, clearcoatRoughness: 0.4 },
-  matte: { roughness: 0.8 },
+  silver: { roughness: 0.46 },
+  /** Toy plastic: satin, with no coat over it. */
+  glossy: { roughness: 0.6 },
+  matte: { roughness: 0.875 },
 } as const
 
 /**

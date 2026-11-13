@@ -31,11 +31,15 @@ describe('materials', () => {
     expect(matte(tokens.cream).metalness).toBe(0)
   })
 
-  it('coat only the glossy finish, and softly: its coat is no sharper than the frame', () => {
-    const plastic = glossy(tokens.cream)
-    expect(plastic.clearcoat).toBeGreaterThan(0)
-    expect(plastic.clearcoat).toBeLessThanOrEqual(1)
-    expect(plastic.clearcoatRoughness).toBeGreaterThanOrEqual(chrome.roughness)
+  it('coat nothing: plastic has a soft sheen of its own and no layer over it', () => {
+    expect(glossy(tokens.cream).clearcoat).toBe(0)
     expect('clearcoat' in matte(tokens.cream)).toBe(false)
+  })
+
+  it('leave nothing sharp enough to mirror the room, and nothing wholly dull', () => {
+    for (const material of [chrome, silver, glossy(tokens.cream), matte(tokens.cream)]) {
+      expect(material.roughness).toBeGreaterThan(0.35)
+      expect(material.roughness).toBeLessThan(0.9)
+    }
   })
 })

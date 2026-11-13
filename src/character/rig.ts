@@ -100,7 +100,7 @@ export interface Rig {
  */
 const SUIT = {
   metalness: 0.9,
-  roughness: 0.46,
+  roughness: 0.54,
   /** Brightness of the silver where the texture is darkest, and how much the texture's own brightness adds. */
   shade: 0.5,
   light: 1.5,
@@ -114,7 +114,7 @@ const SUIT = {
  * own colors (skin, drawstrings, soles) is this much rougher than the model's
  * roughness map says.
  */
-const OWN_ROUGHER = 0.25
+const OWN_ROUGHER = 0.375
 const suitColor = new Color(tokens.chrome)
 /** One silver material per material of the model, shared by every rig built from it. */
 const silverVersions = new WeakMap<Material, Material>()
