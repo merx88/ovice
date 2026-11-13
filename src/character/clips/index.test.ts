@@ -1,4 +1,4 @@
-import { AnimationClip, Euler, Quaternion } from 'three'
+import { AnimationClip, Euler, Quaternion, Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import { BONE_NAMES, CLIP_NAMES, CLIPS, resolveClip, type ClipName, type Pose } from './index'
 import { HANDOFF_POS, SEAT_GROUND_POS } from '../../scene/layout'
@@ -247,6 +247,72 @@ describe('waiting at the desk', () => {
       expect(pose.body?.rot?.[2] ?? 0).toBe(0)
     }
     expect(Math.abs(CLIPS.lookAround.sample(0.75).head?.rot?.[1] ?? 0)).toBeGreaterThan(0.4)
+  })
+})
+
+/**
+ * Which way one hand's palm, thumb and fingers point, in the character's axes:
+ * +x its left, +y up, +z the way it faces. At rest the arms are held out
+ * sideways with the palms down and the thumbs forward.
+ */
+function handAxes(pose: Pose, side: 'L' | 'R') {
+  const turned = new Quaternion()
+  for (const bone of ['root 1', 'body', `arm_${side}.001`, `arm_${side}.002`, `arm_${side}.003`]) {
+    const [x, y, z] = pose[bone]?.rot ?? [0, 0, 0]
+    turned.multiply(new Quaternion().setFromEuler(new Euler(x, y, z)))
+  }
+  return {
+    palm: new Vector3(0, -1, 0).applyQuaternion(turned),
+    thumb: new Vector3(0, 0, 1).applyQuaternion(turned),
+    fingers: new Vector3(side === 'L' ? 1 : -1, 0, 0).applyQuaternion(turned),
+  }
+}
+
+describe('wave', () => {
+  const duration = CLIPS.wave.duration as number
+  /** The hand is up and waving from half a second in until half a second before the end. */
+  const waving: number[] = []
+  for (let t = 0.5; t <= duration - 0.5 + 1e-9; t += 0.02) waving.push(t)
+
+  it('reads the hands of the seated pose as they lie on the keys: palms down, fingers ahead', () => {
+    for (const side of ['L', 'R'] as const) {
+      const { palm, fingers } = handAxes(seatedBase, side)
+      expect(palm.y).toBeLessThan(-0.5)
+      expect(fingers.z).toBeGreaterThan(0.5)
+    }
+  })
+
+  it('shows the palm of the raised hand to the room through the whole sweep', () => {
+    for (const t of waving) expect(handAxes(CLIPS.wave.sample(t), 'R').palm.z).toBeGreaterThan(0.97)
+  })
+
+  it('holds the hand up with the thumb on the side of the head', () => {
+    for (const t of waving) {
+      const { thumb, fingers } = handAxes(CLIPS.wave.sample(t), 'R')
+      // The right hand is on the character's right (-x), so its head is towards +x.
+      expect(thumb.x).toBeGreaterThan(0.6)
+      expect(fingers.y).toBeGreaterThan(0.6)
+    }
+  })
+
+  it('swings the hand from side to side, away from the head and back', () => {
+    const lean = waving.map((t) => handAxes(CLIPS.wave.sample(t), 'R').fingers.x)
+    // Upright by the head at one end, leaning well outwards at the other; never across the head.
+    expect(Math.max(...lean)).toBeLessThan(0)
+    expect(Math.max(...lean)).toBeGreaterThan(-0.25)
+    expect(Math.min(...lean)).toBeLessThan(-0.6)
+    // More than once there and back.
+    const turns = lean.filter((x, i) => i > 0 && i < lean.length - 1 && (x - lean[i - 1]) * (lean[i + 1] - x) < 0)
+    expect(turns.length).toBeGreaterThanOrEqual(4)
+  })
+
+  it('leaves the other hand on the keys and the body where it sits', () => {
+    for (let t = 0; t <= duration; t += 0.05) {
+      const pose = CLIPS.wave.sample(t)
+      expect(armOff(pose, ['arm_L.002', 'arm_L.003'], onKeys)).toBeLessThan(STILL)
+      expect(armOff(pose, ['arm_L.001'], onKeys)).toBeLessThan(BREATH)
+      expect(turnBetween(pose.body?.rot, seatedBase.body?.rot)).toBeLessThan(BREATH)
+    }
   })
 })
 
