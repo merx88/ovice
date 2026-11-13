@@ -100,7 +100,7 @@ export interface Rig {
  */
 const SUIT = {
   metalness: 0.9,
-  roughness: 0.3,
+  roughness: 0.46,
   /** Brightness of the silver where the texture is darkest, and how much the texture's own brightness adds. */
   shade: 0.5,
   light: 1.5,
@@ -109,6 +109,12 @@ const SUIT = {
   /** How much bluer than red (linear) a texel has to be to count as suit. */
   blueness: 0.08,
 } as const
+/**
+ * The model is painted glossier than the office is: what keeps the texture's
+ * own colors (skin, drawstrings, soles) is this much rougher than the model's
+ * roughness map says.
+ */
+const OWN_ROUGHER = 0.25
 const suitColor = new Color(tokens.chrome)
 /** One silver material per material of the model, shared by every rig built from it. */
 const silverVersions = new WeakMap<Material, Material>()
@@ -134,7 +140,7 @@ function inSilverSuit(material: Material): Material {
         '#include <metalnessmap_fragment>',
         `#include <metalnessmap_fragment>
         metalnessFactor = mix(metalnessFactor, ${glsl(SUIT.metalness)}, suit);
-        roughnessFactor = mix(roughnessFactor, ${glsl(SUIT.roughness)}, suit);`,
+        roughnessFactor = mix(min(roughnessFactor + ${glsl(OWN_ROUGHER)}, 1.0), ${glsl(SUIT.roughness)}, suit);`,
       )
   }
   silverVersions.set(material, silver)

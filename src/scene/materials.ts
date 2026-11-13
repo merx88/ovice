@@ -3,32 +3,47 @@ import { MeshPhysicalMaterial, MeshStandardMaterial } from 'three'
 import { tokens } from '../theme/tokens'
 
 /**
- * Mirror-polished metal (bookshelf frame). A mirror has no color of its own:
- * it is white and shows whatever the studio puts in front of it.
+ * How shiny each finish is. Nothing in the room is mirror-sharp: highlights
+ * are broad and soft, and metal is told from plastic by what it mirrors, not
+ * by how crisply it mirrors it.
  */
-export const chrome = new MeshPhysicalMaterial({ color: tokens.white, metalness: 1, roughness: 0.15 })
+const FINISH = {
+  /** The bookshelf's frame. */
+  chrome: { roughness: 0.3 },
+  /** The inflated armchair. */
+  silver: { roughness: 0.38 },
+  /** Toy plastic: a satin body under a thin, soft coat. */
+  glossy: { roughness: 0.5, clearcoat: 0.3, clearcoatRoughness: 0.4 },
+  matte: { roughness: 0.8 },
+} as const
 
-/** Polished, balloon-like metal (the inflated armchair), a little softer and grayer than chrome. */
-export const silver = new MeshPhysicalMaterial({ color: tokens.chrome, metalness: 1, roughness: 0.22 })
+/**
+ * Polished metal with a satin finish (bookshelf frame). It has no color of
+ * its own: it is white and shows whatever the studio puts in front of it.
+ */
+export const chrome = new MeshPhysicalMaterial({ color: tokens.white, metalness: 1, ...FINISH.chrome })
+
+/** Balloon-like metal (the inflated armchair), a little softer and grayer than chrome. */
+export const silver = new MeshPhysicalMaterial({ color: tokens.chrome, metalness: 1, ...FINISH.silver })
 
 const glossyByColor = new Map<string, MeshPhysicalMaterial>()
 const matteByColor = new Map<string, MeshStandardMaterial>()
 
-/** Glossy toy plastic in the given token color. */
+/** Toy plastic with a soft sheen, in the given token color. */
 export function glossy(color: string): MeshPhysicalMaterial {
   let material = glossyByColor.get(color)
   if (!material) {
-    material = new MeshPhysicalMaterial({ color, roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.12 })
+    material = new MeshPhysicalMaterial({ color, ...FINISH.glossy })
     glossyByColor.set(color, material)
   }
   return material
 }
 
-/** Soft, low-sheen surface (book covers, leaves, the laptop shell). */
+/** Soft surface without sheen (book covers, leaves, the laptop shell). */
 export function matte(color: string): MeshStandardMaterial {
   let material = matteByColor.get(color)
   if (!material) {
-    material = new MeshStandardMaterial({ color, roughness: 0.65 })
+    material = new MeshStandardMaterial({ color, ...FINISH.matte })
     matteByColor.set(color, material)
   }
   return material
