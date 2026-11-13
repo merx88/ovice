@@ -98,7 +98,11 @@ export const WALL_Z = -1.8
 export const BOOKSHELF_POS = [-2.03, 0, -1.32] as const
 /** The bookshelf and sofa are turned a little to face the camera. */
 export const BOOKSHELF_YAW = 0.19
+/** The bookshelf's frame; its footprint is centred on its position. */
+export const BOOKSHELF_SIZE = { width: 1, height: 1.78, depth: 0.42 } as const
 export const DRAWER_POS = [-0.74, 0, 0.08] as const
+/** The drawer unit's footprint, centred on its position. */
+export const DRAWER_SIZE = { width: 0.44, depth: 0.5 } as const
 export const SOFA_POS = [2.04, 0, -0.55] as const
 export const SOFA_YAW = -0.2
 /**
@@ -157,6 +161,20 @@ export const SOFA_LIFT = SOFA_SEAT_HEIGHT - CHARACTER_HEM_HEIGHT
  * is where it comes from and goes to, and clear of the side table.
  */
 export const SOFA_STAND_POS = onSofa(-0.14, SOFA_SIZE.cushion.z + SOFA_SIZE.cushion.depth / 2 + CHARACTER_BODY_RADIUS + 0.02)
+
+/**
+ * The way from the seat to the spot in front of the sofa, as ground points:
+ * the way to the hand-off spot as far as the desk's front, on along the front,
+ * and then up to the sofa along the line a character faces that has just
+ * hopped off it. So it sets off on its run back without a turn, and on its
+ * way there it walks up to the sofa and turns its back to it. The way back
+ * is the same in reverse.
+ */
+export const SOFA_PATH: readonly Vec3[] = [
+  ...WALK_OUT_PATH.slice(0, -1),
+  [SOFA_STAND_POS[0] + (HANDOFF_POS[2] - SOFA_STAND_POS[2]) * Math.tan(SOFA_FACING), 0, HANDOFF_POS[2]],
+  SOFA_STAND_POS,
+]
 
 // --- Cameras ----------------------------------------------------------------
 

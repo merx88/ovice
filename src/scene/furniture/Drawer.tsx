@@ -3,10 +3,10 @@ import type { GroupProps } from '@react-three/fiber'
 import { SphereGeometry } from 'three'
 import { tokens } from '../../theme/tokens'
 import { roundedCylinder } from '../geometry'
+import { DRAWER_SIZE } from '../layout'
 import { glossy } from '../materials'
 
-const WIDTH = 0.44
-const DEPTH = 0.5
+const { width: WIDTH, depth: DEPTH } = DRAWER_SIZE
 const CORNER = 0.02
 
 const WHEEL = { radius: 0.055, width: 0.045, insetX: 0.015, insetZ: 0.03 } as const

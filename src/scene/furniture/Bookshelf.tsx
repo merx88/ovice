@@ -2,12 +2,11 @@ import type { GroupProps } from '@react-three/fiber'
 import type { ReactNode } from 'react'
 import { tokens } from '../../theme/tokens'
 import { extrudeRounded, roundedFrameShape, roundedRectShape } from '../geometry'
+import { BOOKSHELF_SIZE } from '../layout'
 import { chrome, glossy, matte } from '../materials'
 import { Arch, Book, FlatBook, Plant } from './Props'
 
-const WIDTH = 1
-const HEIGHT = 1.78
-const DEPTH = 0.42
+const { width: WIDTH, height: HEIGHT, depth: DEPTH } = BOOKSHELF_SIZE
 /** The fat chrome band wrapped around the stack of cells; the cells bulge a little over its inner edge. */
 const FRAME = { band: 0.09, corner: 0.19, edge: 0.04 } as const
 /** One open-fronted tray; four are stacked inside the frame. */

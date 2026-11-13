@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { measurePath, roundCorners, samplePath } from '../character/path'
 import {
+  BOOKSHELF_POS,
+  BOOKSHELF_SIZE,
+  BOOKSHELF_YAW,
   CAMERA,
   CAMERA_MOBILE,
   CHAIR_POS,
@@ -11,6 +14,8 @@ import {
   DESK_BOUNDS,
   DESK_SIZE,
   DESK_TOP_Y,
+  DRAWER_POS,
+  DRAWER_SIZE,
   HANDOFF_FACING,
   HANDOFF_POS,
   LAPTOP_POS,
@@ -21,6 +26,7 @@ import {
   SIDE_TABLE_SIZE,
   SOFA_FACING,
   SOFA_LIFT,
+  SOFA_PATH,
   SOFA_POS,
   SOFA_SEAT_HEIGHT,
   SOFA_SEAT_POS,
@@ -276,6 +282,137 @@ describe('the walk from the seat to the hand-off spot', () => {
   it('hands the file over facing the camera', () => {
     const towardsCameraZ = Math.sign(CAMERA.position[Z] - HANDOFF_POS[Z])
     expect(Math.cos(HANDOFF_FACING) * towardsCameraZ).toBeCloseTo(1)
+  })
+})
+
+describe('the way from the seat to the sofa', () => {
+  /** The route as it is walked out and run back: the waypoints with their corners rounded. */
+  const route = measurePath(roundCorners(SOFA_PATH, WALK_CORNER_RADIUS))
+  const STEP = 0.01
+  const points: Vec3[] = []
+  for (let distance = 0; distance < route.length; distance += STEP) points.push([...samplePath(route, distance).position])
+  points.push([...samplePath(route, route.length).position])
+
+  /** A point of the room in the frame of a piece of furniture that stands at `origin`, turned by `yaw`: [across it, in front of its middle]. */
+  function inFrameOf(point: Vec3, origin: Vec3, yaw: number): [number, number] {
+    const dx = point[X] - origin[X]
+    const dz = point[Z] - origin[Z]
+    return [dx * Math.cos(yaw) - dz * Math.sin(yaw), dx * Math.sin(yaw) + dz * Math.cos(yaw)]
+  }
+
+  /** How far a point is from a box that stands at `origin`, `width` across and `depth` deep, turned by `yaw`. */
+  function gapToBox(point: Vec3, origin: Vec3, width: number, depth: number, yaw = 0): number {
+    return distanceToFootprint(inFrameOf(point, origin, yaw), [-width / 2, -depth / 2], [width / 2, depth / 2])
+  }
+
+  /** How far a point is from the sofa: its cushion, its two arms and its backrest. */
+  function gapToSofa(point: Vec3): number {
+    const { arm, back, cushion } = SOFA_SIZE
+    const spot = inFrameOf(point, SOFA_POS, SOFA_YAW)
+    return Math.min(
+      distanceToFootprint(spot, [-cushion.width / 2, cushion.z - cushion.depth / 2], [cushion.width / 2, cushion.z + cushion.depth / 2]),
+      distanceToFootprint(spot, [-arm.x - arm.tube, -arm.height / 2], [-arm.x + arm.tube, arm.height / 2]),
+      distanceToFootprint(spot, [arm.x - arm.tube, -arm.height / 2], [arm.x + arm.tube, arm.height / 2]),
+      distanceToFootprint(spot, [-back.radius - back.tube, back.z - back.tube], [back.radius + back.tube, back.z + back.tube]),
+    )
+  }
+
+  const gapToDesk = (point: Vec3) =>
+    distanceToFootprint([point[X], point[Z]], [DESK_BOUNDS.min[X], DESK_BOUNDS.min[Z]], [DESK_BOUNDS.max[X], DESK_BOUNDS.max[Z]])
+
+  it('starts on the seat and ends on the spot in front of the sofa, on the floor all the way', () => {
+    expect(SOFA_PATH[0]).toEqual(SEAT_GROUND_POS)
+    expect(SOFA_PATH[SOFA_PATH.length - 1]).toEqual(SOFA_STAND_POS)
+    expect(points[0]).toEqual([...SEAT_GROUND_POS])
+    expect(points[points.length - 1]).toEqual([...SOFA_STAND_POS])
+    for (const point of points) expect(point[Y]).toBe(0)
+  })
+
+  it('is the way to the hand-off spot as far as that goes, and passes over it', () => {
+    expect(SOFA_PATH.slice(0, WALK_OUT_PATH.length - 1)).toEqual(WALK_OUT_PATH.slice(0, -1))
+    const handOver = measurePath(roundCorners(WALK_OUT_PATH, WALK_CORNER_RADIUS))
+    // The same ground, step for step, up to the hand-off spot.
+    for (let distance = 0; distance <= handOver.length; distance += 0.25) {
+      const [x, , z] = samplePath(route, distance).position
+      const [hx, , hz] = samplePath(handOver, distance).position
+      expect(Math.hypot(x - hx, z - hz), `${distance} m along`).toBeLessThan(1e-9)
+    }
+    const [x, , z] = samplePath(route, handOver.length).position
+    expect(Math.hypot(x - HANDOFF_POS[X], z - HANDOFF_POS[Z])).toBeLessThan(1e-9)
+  })
+
+  it('keeps the body clear of the desk and of the drawer unit under it all the way', () => {
+    // As on the way to the hand-off spot: for its first steps it only has to come no closer than it sits.
+    const FIRST_STEPS = 0.3
+    const gapAtSeat = gapToDesk(SEAT_GROUND_POS)
+    points.forEach((point, index) => {
+      const walked = index * STEP
+      const least = walked < FIRST_STEPS ? gapAtSeat : CHARACTER_BODY_RADIUS
+      expect(gapToDesk(point), `${walked.toFixed(2)} m along`).toBeGreaterThanOrEqual(least)
+      // The drawers' fronts and knobs stand a little proud of the unit's footprint.
+      expect(gapToBox(point, DRAWER_POS, DRAWER_SIZE.width, DRAWER_SIZE.depth), `${walked.toFixed(2)} m along`).toBeGreaterThanOrEqual(CHARACTER_BODY_RADIUS + 0.03)
+    })
+  })
+
+  it('keeps the body clear of the bookshelf', () => {
+    points.forEach((point, index) => {
+      // The cells stand 2.5 cm proud of the frame in front.
+      const gap = gapToBox(point, BOOKSHELF_POS, BOOKSHELF_SIZE.width, BOOKSHELF_SIZE.depth, BOOKSHELF_YAW)
+      expect(gap, `${(index * STEP).toFixed(2)} m along`).toBeGreaterThanOrEqual(CHARACTER_BODY_RADIUS + 0.03)
+    })
+  })
+
+  it('keeps the body clear of the sofa and of the side table, up to where it stands before the hop', () => {
+    points.forEach((point, index) => {
+      const along = `${(index * STEP).toFixed(2)} m along`
+      expect(gapToSofa(point), along).toBeGreaterThanOrEqual(CHARACTER_BODY_RADIUS)
+      expect(gapToBox(point, SIDE_TABLE_POS, SIDE_TABLE_SIZE.width, SIDE_TABLE_SIZE.depth), along).toBeGreaterThanOrEqual(CHARACTER_BODY_RADIUS)
+    })
+  })
+
+  it('goes round the left end of the desk and along its front, never between the desk and the sofa', () => {
+    const leftmost = Math.min(...points.map(([x]) => x))
+    expect(leftmost).toBeLessThan(DESK_BOUNDS.min[X] - CHARACTER_BODY_RADIUS)
+    // Past the desk's right end it is in front of the desk, or already on the stretch that ends before the cushion.
+    const lastStretch = route.length - Math.hypot(SOFA_STAND_POS[X] - SOFA_PATH[3][X], SOFA_STAND_POS[Z] - SOFA_PATH[3][Z])
+    points.forEach(([x, , z], index) => {
+      if (x > DESK_BOUNDS.max[X] && index * STEP < lastStretch) expect(z).toBeGreaterThan(DESK_BOUNDS.max[Z] + CHARACTER_BODY_RADIUS)
+    })
+  })
+
+  it('comes up to the sofa along the line a character faces that has just hopped off it', () => {
+    const [bx, , bz] = SOFA_PATH[SOFA_PATH.length - 2]
+    const away = Math.atan2(bx - SOFA_STAND_POS[X], bz - SOFA_STAND_POS[Z])
+    // So it sets off on its run back without a turn, and on arriving turns its back to the sofa.
+    expect(away).toBeCloseTo(SOFA_FACING, 10)
+    expect(samplePath(route, route.length - 0.05).heading).toBeCloseTo(SOFA_FACING + Math.PI, 10)
+  })
+
+  it('stays in the room and in the picture', () => {
+    for (const [x, , z] of points) {
+      expect(z - CHARACTER_BODY_RADIUS).toBeGreaterThan(WALL_Z)
+      const halfWidth = (CAMERA.position[Z] - z) * Math.tan((CAMERA.fov * Math.PI) / 360) * CAMERA.aspect
+      expect(Math.abs(x - CAMERA.position[X]) + CHARACTER_BODY_RADIUS).toBeLessThan(halfWidth)
+    }
+  })
+
+  it('has room for every one of its arcs', () => {
+    for (let index = 1; index < SOFA_PATH.length - 1; index++) {
+      const [ax, , az] = SOFA_PATH[index - 1]
+      const [bx, , bz] = SOFA_PATH[index]
+      const [cx, , cz] = SOFA_PATH[index + 1]
+      const before = Math.hypot(bx - ax, bz - az)
+      const after = Math.hypot(cx - bx, cz - bz)
+      const turn = Math.acos(((bx - ax) * (cx - bx) + (bz - az) * (cz - bz)) / (before * after))
+      /** How far from the corner an arc of the full radius leaves one stretch and joins the next. */
+      const cut = WALK_CORNER_RADIUS * Math.tan(turn / 2)
+      expect(cut, `corner ${index}`).toBeLessThan(Math.min(before, after) / 2)
+    }
+  })
+
+  it('is about seven metres long: a walk of some five seconds, a run of two', () => {
+    expect(route.length).toBeGreaterThan(7)
+    expect(route.length).toBeLessThan(7.5)
   })
 })
 
