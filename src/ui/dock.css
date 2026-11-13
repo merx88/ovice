@@ -24,8 +24,8 @@
 .dock__button {
   display: grid;
   place-items: center;
-  width: calc(var(--u) * 56);
-  height: calc(var(--u) * 56);
+  width: max(calc(var(--u) * 56), var(--tap));
+  height: max(calc(var(--u) * 56), var(--tap));
   border-radius: 50%;
   background: var(--c-ui-button);
   color: var(--c-white);
@@ -107,7 +107,7 @@
   flex: none;
   box-sizing: border-box;
   width: 100%;
-  height: calc(var(--u) * 56);
+  height: max(calc(var(--u) * 56), var(--tap));
   margin-top: calc(var(--u) * 24);
   padding: calc(var(--u) * 4);
   border-radius: calc(var(--u) * 28);
@@ -247,4 +247,70 @@
 
 .task__status[data-status='failed']::before {
   background: var(--c-danger);
+}
+
+/* --- In-between widths ---------------------------------------------------------------- */
+
+/* Where the prompt panel reaches under the panel's place, the panel stands above the prompt panel instead. */
+@media (min-width: 768px) and (max-width: 1125px) {
+  .panel {
+    bottom: calc(100% + var(--u) * 105);
+    max-height: calc(100vh - var(--u) * 345);
+  }
+}
+
+/* --- Narrow screens: the panel is a sheet at the bottom, the dock rides on top of it ------ */
+
+@media (max-width: 767px) {
+  .corner {
+    display: flex;
+    flex-direction: column-reverse;
+    align-items: flex-end;
+    gap: 12px;
+  }
+
+  .dock {
+    margin-right: max(16px, env(safe-area-inset-right));
+  }
+
+  .panel {
+    position: static;
+    width: 100%;
+    max-height: 70vh;
+    max-height: 70dvh;
+    padding: 16px max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom))
+      max(16px, env(safe-area-inset-left));
+    border-radius: 28px 28px 0 0;
+  }
+
+  .panel--tasks {
+    height: auto;
+    min-height: 220px;
+  }
+
+  .tiles {
+    align-self: center;
+    width: min(100%, 420px);
+  }
+
+  .search {
+    align-self: center;
+    width: min(100%, 420px);
+  }
+
+  /* The sheet takes the place of the prompt bar for as long as it is open. */
+  .bottom:has(.panel) {
+    padding-bottom: 0;
+  }
+
+  .bottom:has(.panel) .slot {
+    display: none;
+  }
+
+  @keyframes panel-in {
+    from {
+      transform: translateY(40%);
+      opacity: 0;
+    }
+  }
 }

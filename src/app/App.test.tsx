@@ -1,6 +1,9 @@
-import { render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { Children, isValidElement, type ReactNode } from 'react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { cancelActive } from '../agent/orchestrator'
+import { useTasks } from '../store/tasks'
 import { App } from './App'
 
 const scene = vi.hoisted(() => ({ fails: false }))
@@ -28,6 +31,11 @@ function stubWebGL(available: boolean) {
 }
 
 describe('App', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    useTasks.setState({ tasks: [], activeId: null, viewingId: null })
+  })
+
   afterEach(() => {
     scene.fails = false
     vi.restoreAllMocks()
@@ -53,6 +61,27 @@ describe('App', () => {
     expect(screen.getByRole('alert')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Office' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '설정' })).toBeInTheDocument()
+  })
+
+  it('still takes a prompt, shows the tasks and opens the settings when WebGL is unavailable', async () => {
+    stubWebGL(false)
+    render(<App />)
+    try {
+      fireEvent.change(screen.getByRole('textbox'), { target: { value: 'compare three laptops' } })
+      fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter' })
+      expect(screen.getByRole('progressbar')).toBeInTheDocument()
+      expect(screen.getByText('compare three laptops')).toBeInTheDocument()
+
+      await userEvent.click(screen.getByRole('button', { name: '작업 목록' }))
+      expect(within(screen.getByRole('region', { name: '작업 목록' })).getByText('진행 중')).toBeInTheDocument()
+
+      await userEvent.click(screen.getByRole('button', { name: '설정' }))
+      expect(screen.getByRole('dialog', { name: '설정' })).toBeInTheDocument()
+      // The notice about the scene is still there, under the interface.
+      expect(screen.getByText('3D 화면을 불러오지 못했어요')).toBeInTheDocument()
+    } finally {
+      act(() => cancelActive())
+    }
   })
 
   it('keeps the interface when the scene fails', () => {

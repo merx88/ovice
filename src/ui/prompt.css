@@ -66,8 +66,8 @@
   display: grid;
   place-items: center;
   flex: none;
-  width: calc(var(--u) * 48);
-  height: calc(var(--u) * 48);
+  width: max(calc(var(--u) * 48), var(--tap));
+  height: max(calc(var(--u) * 48), var(--tap));
   border-radius: 50%;
   transition: background-color 120ms ease;
 }
@@ -82,7 +82,7 @@
   align-items: center;
   flex: none;
   box-sizing: border-box;
-  height: calc(var(--u) * 56);
+  height: max(calc(var(--u) * 56), var(--tap));
   padding: 0 calc(var(--u) * 12.5) 0 calc(var(--u) * 10.5);
   border: max(2px, calc(var(--u) * 2.5)) solid var(--c-ui-chip-edge);
   border-radius: calc(var(--u) * 14);
@@ -111,8 +111,8 @@
   place-items: center;
   flex: none;
   box-sizing: border-box;
-  width: calc(var(--u) * 54);
-  height: calc(var(--u) * 54);
+  width: max(calc(var(--u) * 54), var(--tap));
+  height: max(calc(var(--u) * 54), var(--tap));
   margin-left: auto;
   border: max(2px, calc(var(--u) * 3)) solid var(--c-ui-field);
   border-radius: 50%;
@@ -132,7 +132,7 @@
   align-items: center;
   box-sizing: border-box;
   width: min(calc(var(--u) * 700), 100%);
-  height: calc(var(--u) * 64);
+  min-height: calc(var(--u) * 64);
   /* …and its pills a pixel lower. */
   margin: 0 auto calc(var(--u) * -1);
   padding: calc(var(--u) * 4);
@@ -187,8 +187,7 @@
 
 .pill__retry {
   flex: none;
-  min-height: 44px;
-  height: calc(var(--u) * 48);
+  height: max(calc(var(--u) * 48), var(--tap));
   margin-left: calc(var(--u) * 12);
   padding: 0 calc(var(--u) * 22);
   border-radius: calc(var(--u) * 24);
@@ -206,8 +205,8 @@
   display: grid;
   place-items: center;
   flex: none;
-  width: calc(var(--u) * 56);
-  height: calc(var(--u) * 56);
+  width: max(calc(var(--u) * 56), var(--tap));
+  height: max(calc(var(--u) * 56), var(--tap));
   border-radius: 50%;
   transition: background-color 120ms ease;
 }
@@ -243,5 +242,53 @@
 @keyframes step-now {
   50% {
     opacity: 0.25;
+  }
+}
+
+/* --- Narrow screens ------------------------------------------------------------ */
+
+@media (max-width: 767px) {
+  .prompt {
+    gap: 10px;
+    margin-bottom: 0;
+    padding: 12px 14px;
+    border-radius: 34px;
+  }
+
+  /* Sixteen pixels at least: below that, phones zoom the page in when the field is tapped. */
+  .prompt__field {
+    min-height: 44px;
+    max-height: 132px;
+    padding: 11px 16px;
+    border-radius: 22px;
+    font-size: 16px;
+    line-height: 22px;
+  }
+
+  .prompt__tools {
+    gap: 8px;
+    margin-right: 0;
+  }
+
+  .pill {
+    margin-bottom: 0;
+  }
+
+  .pill__disc {
+    margin-right: 12px;
+  }
+
+  /* The retry pill says what happened; the prompt itself is in the tasks panel. */
+  .pill--failed .pill__lead {
+    margin-right: 0;
+  }
+
+  .pill--failed .pill__lead + span {
+    display: none;
+  }
+
+  .pill__retry {
+    margin-left: 8px;
+    padding: 0 16px;
   }
 }
