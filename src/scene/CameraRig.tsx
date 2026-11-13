@@ -23,6 +23,9 @@ const CLOSEUPS: Record<string, CameraSpec> = {
   seatSide: { position: [1.28, 0.85, -0.62], target: [0.05, 0.75, -0.55], fov: 62, aspect: 1 },
   handoff: { position: [0.6, 1.3, 4.6], target: [0.05, 0.65, 1], fov: 26, aspect: 1 },
   handoffSide: { position: [1.9, 0.75, 1.15], target: [0.05, 0.6, 1.05], fov: 42, aspect: 1 },
+  // On the sofa, from the front and from its open side.
+  lounge: { position: [1.5, 1.35, 3.1], target: [1.98, 0.85, -0.3], fov: 26, aspect: 1 },
+  loungeSide: { position: [0.2, 1.0, 0.25], target: [1.95, 0.8, -0.2], fov: 44, aspect: 1 },
 }
 
 /** The view `?cam=` asks for, if any. */

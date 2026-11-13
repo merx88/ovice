@@ -2,11 +2,10 @@ import type { GroupProps } from '@react-three/fiber'
 import { Shape } from 'three'
 import { tokens } from '../../theme/tokens'
 import { extrudeRounded } from '../geometry'
+import { SIDE_TABLE_SIZE } from '../layout'
 import { glossy } from '../materials'
 
-const WIDTH = 0.46
-const HEIGHT = 0.47
-const DEPTH = 0.3
+const { width: WIDTH, height: HEIGHT, depth: DEPTH } = SIDE_TABLE_SIZE
 /** Thickness of the band the table is bent from. */
 const BAND = 0.062
 /** Outer radius of the two bends. */

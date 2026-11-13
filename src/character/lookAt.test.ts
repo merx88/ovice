@@ -22,6 +22,13 @@ describe('computeLookYaw', () => {
     expect(BODY_MAX_YAW).toBeCloseTo(Math.PI / 6)
   })
 
+  it('leaves the body alone where it is told to, and turns the head as far as it goes', () => {
+    expect(computeLookYaw(0.3, false)).toEqual({ head: 0.3, body: 0 })
+    expect(computeLookYaw(1.2, false)).toEqual({ head: HEAD_MAX_YAW, body: 0 })
+    expect(computeLookYaw(-2.5, false)).toEqual({ head: -HEAD_MAX_YAW, body: 0 })
+    expect(computeLookYaw(1.2, true)).toEqual(computeLookYaw(1.2))
+  })
+
   it('mirrors for negative angles', () => {
     expect(computeLookYaw(-0.3).head).toBeCloseTo(-0.3)
     expect(computeLookYaw(-0.3).body).toBeCloseTo(0)

@@ -4,16 +4,17 @@
 //
 //   ?clip=wave                  one clip, played again and again
 //   ?clip=standUp,walk,sitDown  several, one after the other, round and round
-//   &at=desk|floor              where the character is (default: where the first clip belongs)
+//   &at=desk|floor|sofa         where the character is (default: where the first clip belongs)
 //   &look=0.5,1.2,3             a point in the room to look at
 //   &speed=1.5                  how fast the clips play
 //   &hold=2                     how long (s) a looping clip is shown before the next one
 //
 // Nothing here is part of the product: `OfficeScene` only asks in development.
 import { CLIP_NAMES, CLIPS, type ClipName } from './clips'
+import { LOUNGE_CLIPS } from './clips/lounge'
 
-/** Where the reviewed character is: on its chair at the desk, or standing on the open floor in front of it. */
-export type ReviewPlace = 'desk' | 'floor'
+/** Where the reviewed character is: on its chair at the desk, standing on the open floor in front of it, or on the sofa. */
+export type ReviewPlace = 'desk' | 'floor' | 'sofa'
 
 export interface ClipReviewRequest {
   /** The clips to play, in order; after the last comes the first again. */
@@ -27,14 +28,15 @@ export interface ClipReviewRequest {
   hold: number
 }
 
-const PLACES: readonly ReviewPlace[] = ['desk', 'floor']
+const PLACES: readonly ReviewPlace[] = ['desk', 'floor', 'sofa']
 
-/** The clips that are played standing on the floor; every other clip is played seated. */
+/** The clips that are played standing on the floor, and those that are played on the sofa; every other clip is played at the desk. */
 const STANDING_CLIPS: readonly ClipName[] = ['walk', 'holdFile']
 
 /** Where `clip` is at home. */
 export function placeOf(clip: ClipName): ReviewPlace {
-  return STANDING_CLIPS.includes(clip) ? 'floor' : 'desk'
+  if (STANDING_CLIPS.includes(clip)) return 'floor'
+  return LOUNGE_CLIPS.includes(clip) ? 'sofa' : 'desk'
 }
 
 function isClipName(name: string): name is ClipName {

@@ -2,13 +2,10 @@ import { RoundedBox } from '@react-three/drei'
 import type { GroupProps } from '@react-three/fiber'
 import { TorusGeometry } from 'three'
 import { archPoints, tubeThrough } from '../geometry'
+import { SOFA_SIZE } from '../layout'
 import { silver } from '../materials'
 
-/** Each arm is a fat ring standing on the floor, seen edge-on from the front. */
-const ARM = { tube: 0.125, height: 0.665, x: 0.46 } as const
-/** The backrest is one tube arched between the arms. */
-const BACK = { tube: 0.12, radius: 0.27, baseY: 0.28, legLength: 0.25, z: -0.2 } as const
-const CUSHION = { width: 0.72, height: 0.27, depth: 0.68, radius: 0.125, y: 0.36, z: 0.03 } as const
+const { arm: ARM, back: BACK, cushion: CUSHION } = SOFA_SIZE
 
 const armGeometry = new TorusGeometry(ARM.height / 2 - ARM.tube, ARM.tube, 20, 56)
 armGeometry.rotateY(Math.PI / 2)

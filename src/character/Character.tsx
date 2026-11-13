@@ -16,6 +16,7 @@ import {
 import type { Vec3 } from '../scene/layout'
 import { tokens } from '../theme/tokens'
 import { CLIPS, resolveClip, type ClipName } from './clips'
+import { LOUNGE_CLIPS } from './clips/lounge'
 import { SIP_GRIP } from './clips/sip'
 import { Folder } from './Folder'
 import { carryCup } from './heldCup'
@@ -252,7 +253,8 @@ export function Character(props: CharacterProps) {
     if (lookTarget) {
       rig.byName.head.bone.getWorldPosition(state.head)
       const angles = lookAngles([state.head.x, state.head.y, state.head.z], facing, lookTarget)
-      ;({ head: headYaw, body: bodyYaw } = computeLookYaw(angles.yaw))
+      // On the sofa the hands rest on the legs: the head alone turns.
+      ;({ head: headYaw, body: bodyYaw } = computeLookYaw(angles.yaw, !LOUNGE_CLIPS.includes(clip)))
       pitch = computeLookPitch(angles.pitch)
     }
     state.look.head = damp(state.look.head, headYaw, LOOK_RATE, step)

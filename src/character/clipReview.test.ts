@@ -30,6 +30,13 @@ describe('parseClipReview', () => {
     expect(parseClipReview('?clip=idle&at=moon')?.place).toBe('desk')
   })
 
+  it('plays the lounge clips on the sofa, and anything else there when asked', () => {
+    expect(parseClipReview('?clip=loungeWave')).toEqual({ clips: ['loungeWave'], place: 'sofa', look: null, speed: 1, hold: 3 })
+    expect(parseClipReview('?clip=loungeIdle,loungeStretch,loungeLookAround')?.place).toBe('sofa')
+    expect(parseClipReview('?clip=idle&at=sofa')?.place).toBe('sofa')
+    expect(parseClipReview('?clip=loungeIdle&at=floor')?.place).toBe('floor')
+  })
+
   it('reads a point to look at', () => {
     expect(parseClipReview('?clip=idle&look=0.5,1.2,3')?.look).toEqual([0.5, 1.2, 3])
     expect(parseClipReview('?clip=idle&look=-2,0,1e1')?.look).toEqual([-2, 0, 10])
@@ -49,18 +56,21 @@ describe('parseClipReview', () => {
 })
 
 describe('placeOf', () => {
-  it('seats the desk clips and stands the others on the floor', () => {
+  it('seats the desk clips, stands the walking ones on the floor and puts the lounge clips on the sofa', () => {
     expect(placeOf('idle')).toBe('desk')
     expect(placeOf('typing')).toBe('desk')
     expect(placeOf('sitDown')).toBe('desk')
     expect(placeOf('walk')).toBe('floor')
     expect(placeOf('holdFile')).toBe('floor')
+    for (const clip of ['loungeIdle', 'loungeWave', 'loungeStretch', 'loungeLookAround'] as const) expect(placeOf(clip)).toBe('sofa')
   })
 })
 
 describe('isLoop', () => {
   it('tells the clips that run on from those that end', () => {
     expect(isLoop('idle')).toBe(true)
+    expect(isLoop('loungeIdle')).toBe(true)
+    expect(isLoop('loungeWave')).toBe(false)
     expect(isLoop('walk')).toBe(true)
     expect(isLoop('wave')).toBe(false)
     expect(isLoop('standUp')).toBe(false)

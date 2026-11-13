@@ -4,6 +4,7 @@ import type { AnimationClip } from 'three'
 import { holdFile } from './holdFile'
 import { idle } from './idle'
 import { lookAround } from './lookAround'
+import { loungeIdle, loungeLookAround, loungeStretch, loungeWave } from './lounge'
 import { scratchHead } from './scratchHead'
 import type { ClipName, ProceduralClip } from './shared'
 import { sip } from './sip'
@@ -33,6 +34,10 @@ export const CLIPS: Record<ClipName, ProceduralClip> = {
   holdFile,
   sitDown,
   scratchHead,
+  loungeIdle,
+  loungeWave,
+  loungeStretch,
+  loungeLookAround,
 }
 
 export const CLIP_NAMES = Object.keys(CLIPS) as ClipName[]

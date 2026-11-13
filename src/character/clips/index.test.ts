@@ -1,7 +1,8 @@
 import { AnimationClip, Euler, Quaternion, Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import { BONE_NAMES, CLIP_NAMES, CLIPS, resolveClip, type ClipName, type Pose } from './index'
-import { HANDOFF_POS, SEAT_GROUND_POS } from '../../scene/layout'
+import { HANDOFF_POS, SEAT_GROUND_POS, SOFA_LIFT } from '../../scene/layout'
+import { ARM_ON_LEG, armFromLeg, LOUNGE_CLIPS, loungeBase } from './lounge'
 import { MAX_STEP } from '../playback'
 import {
   ARM_ON_KEYS,
@@ -33,8 +34,12 @@ const ALL_CLIPS: ClipName[] = [
   'holdFile',
   'sitDown',
   'scratchHead',
+  'loungeIdle',
+  'loungeWave',
+  'loungeStretch',
+  'loungeLookAround',
 ]
-const LOOPS: ClipName[] = ['idle', 'typing', 'think', 'walk', 'holdFile']
+const LOOPS: ClipName[] = ['idle', 'typing', 'think', 'walk', 'holdFile', 'loungeIdle']
 const ONE_SHOTS = ALL_CLIPS.filter((name) => !LOOPS.includes(name))
 
 /** Fails on a bone the rig does not have, a malformed offset or a non-finite number. */
@@ -411,6 +416,130 @@ describe('sip', () => {
     // The face looks a little upwards at the most tipped moment.
     expect(headBack).toBeGreaterThan(0.05)
     expect(headBack).toBeLessThan(0.3)
+  })
+})
+
+// --- On the sofa ------------------------------------------------------------------
+
+const onLegs = arms(ARM_ON_LEG)
+
+describe('on the sofa', () => {
+  const GESTURES = ['loungeWave', 'loungeStretch', 'loungeLookAround'] as const
+
+  it('names the clips that are played there', () => {
+    expect([...LOUNGE_CLIPS].sort()).toEqual(['loungeIdle', ...GESTURES].sort())
+    for (const name of LOUNGE_CLIPS) expect(CLIP_NAMES).toContain(name)
+  })
+
+  it('sits back on the cushion with the head upright and the legs out in front', () => {
+    expect(loungeBase['root 1']?.pos).toEqual([0, SOFA_LIFT, 0])
+    const lean = loungeBase.body?.rot?.[0] ?? 0
+    // Leaning back a little, not lying down.
+    expect(lean).toBeLessThan(-0.05)
+    expect(lean).toBeGreaterThan(-0.4)
+    expect((loungeBase.head?.rot?.[0] ?? 0) + lean).toBeCloseTo(0, 5)
+    // The thighs point forward, nearly level.
+    for (const thigh of ['Leg_L.001', 'Leg_R.001']) expect(loungeBase[thigh]?.rot?.[0] ?? 0).toBeLessThan(-1.2)
+  })
+
+  it('rests both hands on the legs, palms down, while it lounges', () => {
+    expect(armOff(loungeBase, [...LEFT_ARM, ...RIGHT_ARM], onLegs)).toBeLessThan(STILL)
+    for (const side of ['L', 'R'] as const) expect(handAxes(loungeBase, side).palm.y).toBeLessThan(-0.7)
+    for (let t = 0; t <= 7.2; t += 0.3) {
+      const pose = CLIPS.loungeIdle.sample(t)
+      // Breathing rocks the chest, not the arms.
+      const chest = (pose.body?.rot?.[0] ?? 0) - (loungeBase.body?.rot?.[0] ?? 0)
+      for (const upper of ['arm_L.001', 'arm_R.001']) {
+        expect((pose[upper]?.rot?.[0] ?? 0) - (loungeBase[upper]?.rot?.[0] ?? 0)).toBeCloseTo(-chest, 10)
+      }
+      expect(armOff(pose, ['arm_L.002', 'arm_L.003', 'arm_R.002', 'arm_R.003'], onLegs)).toBeLessThan(STILL)
+      expect(pose['root 1']?.pos).toEqual([0, SOFA_LIFT, 0])
+    }
+  })
+
+  it('lounges in a loop that comes round without a seam', () => {
+    expect(CLIPS.loungeIdle.duration).toBeNull()
+    expectSamePose(CLIPS.loungeIdle.sample(0), loungeBase)
+    // One breath is 3.6 s: the pose is the same a breath later, wherever in the breath it is.
+    for (const t of [0, 0.7, 1.9, 3.1]) expect(poseChange(CLIPS.loungeIdle.sample(t), CLIPS.loungeIdle.sample(t + 3.6))).toBeLessThan(STILL)
+    expectContinuous('loungeIdle', 1, 7.2)
+  })
+
+  it.each(GESTURES)('%s starts and ends as it lounges, so that lounging can follow it without a jump', (name) => {
+    const clip = CLIPS[name]
+    const breathing = ['body', 'head', 'arm_L.001', 'arm_R.001']
+    for (const t of [0, clip.duration as number]) expectSamePose(clip.sample(t), CLIPS.loungeIdle.sample(0), breathing)
+    for (const t of [0, clip.duration as number]) {
+      expect(armOff(clip.sample(t), ['arm_L.002', 'arm_L.003', 'arm_R.002', 'arm_R.003'], onLegs)).toBeLessThan(STILL)
+    }
+  })
+
+  it.each(GESTURES)('%s moves without a jump and never leaves the cushion', (name) => {
+    expectContinuous(name)
+    for (let t = 0; t <= (CLIPS[name].duration as number); t += 0.1) expect(CLIPS[name].sample(t)['root 1']?.pos).toEqual([0, SOFA_LIFT, 0])
+  })
+
+  it('waves from the sofa with the palm to the room and the thumb on the side of the head', () => {
+    const duration = CLIPS.loungeWave.duration as number
+    const lean: number[] = []
+    for (let t = 0.5; t <= duration - 0.5 + 1e-9; t += 0.02) {
+      const pose = CLIPS.loungeWave.sample(t)
+      const { palm, thumb, fingers } = handAxes(pose, 'R')
+      expect(palm.z).toBeGreaterThan(0.97)
+      expect(thumb.x).toBeGreaterThan(0.6)
+      expect(fingers.y).toBeGreaterThan(0.6)
+      lean.push(fingers.x)
+      // The other hand stays on its leg.
+      expect(armOff(pose, ['arm_L.002', 'arm_L.003'], onLegs)).toBeLessThan(STILL)
+      expect(armOff(pose, ['arm_L.001'], onLegs)).toBeLessThan(BREATH)
+    }
+    expect(Math.max(...lean)).toBeLessThan(0)
+    expect(Math.min(...lean)).toBeLessThan(-0.6)
+  })
+
+  it('stretches with both arms up and the head back, and puts the hands back on the legs', () => {
+    const top = CLIPS.loungeStretch.sample(1.5)
+    for (const side of ['L', 'R'] as const) expect(handAxes(top, side).fingers.y).toBeGreaterThan(0.5)
+    expect(armOff(top, LEFT_ARM, onLegs)).toBeGreaterThan(0.5)
+    expect(armOff(top, RIGHT_ARM, onLegs)).toBeGreaterThan(0.5)
+    expect((top.head?.rot?.[0] ?? 0) + (top.body?.rot?.[0] ?? 0)).toBeLessThan(-0.15)
+  })
+
+  it('looks around with the head alone, so that the hands stay on the legs', () => {
+    for (let t = 0; t <= 3; t += 0.1) {
+      const pose = CLIPS.loungeLookAround.sample(t)
+      expect(armOff(pose, ['arm_L.002', 'arm_L.003', 'arm_R.002', 'arm_R.003'], onLegs)).toBeLessThan(STILL)
+      expect(armOff(pose, ['arm_L.001', 'arm_R.001'], onLegs)).toBeLessThan(BREATH)
+      expect(pose.body?.rot?.[1] ?? 0).toBe(0)
+      expect(pose.body?.rot?.[2] ?? 0).toBe(0)
+    }
+    expect(CLIPS.loungeLookAround.sample(0.75).head?.rot?.[1] ?? 0).toBeGreaterThan(0.4)
+    expect(CLIPS.loungeLookAround.sample(2.2).head?.rot?.[1] ?? 0).toBeLessThan(-0.4)
+  })
+})
+
+describe('armFromLeg', () => {
+  const gesture: ArmPose = { upper: [0.17, 0.25, 0.92], fore: [1.19, 0.47, 0.02], hand: [0.02, -0.07, 0] }
+
+  it('starts on the leg and ends in the gesture', () => {
+    expect(armFromLeg(gesture, 0)).toEqual(ARM_ON_LEG)
+    expect(armFromLeg(gesture, 1)).toEqual(gesture)
+  })
+
+  it('leaves the leg by the shoulder alone, whatever the gesture', () => {
+    const early = armFromLeg(gesture, 0.1)
+    expect(turnBetween(early.upper, ARM_ON_LEG.upper)).toBeGreaterThan(0.01)
+    expect(turnBetween(early.fore, ARM_ON_LEG.fore)).toBeLessThan(STILL)
+    expect(turnBetween(early.hand, ARM_ON_LEG.hand)).toBeLessThan(STILL)
+  })
+
+  it('moves without a jump', () => {
+    let previous = armFromLeg(gesture, 0)
+    for (let weight = 0.01; weight <= 1.001; weight += 0.01) {
+      const next = armFromLeg(gesture, weight)
+      for (const joint of ['upper', 'fore', 'hand'] as const) expect(turnBetween(previous[joint], next[joint])).toBeLessThan(0.12)
+      previous = next
+    }
   })
 })
 

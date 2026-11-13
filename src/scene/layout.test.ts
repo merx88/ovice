@@ -6,6 +6,8 @@ import {
   CHAIR_POS,
   CHARACTER_BODY_RADIUS,
   CHARACTER_HEIGHT,
+  CHARACTER_HEM_HEIGHT,
+  CUP_POS,
   DESK_BOUNDS,
   DESK_SIZE,
   DESK_TOP_Y,
@@ -15,11 +17,22 @@ import {
   SEAT_FACING,
   SEAT_GROUND_POS,
   SEAT_POS,
+  SIDE_TABLE_POS,
+  SIDE_TABLE_SIZE,
+  SOFA_FACING,
+  SOFA_LIFT,
+  SOFA_POS,
+  SOFA_SEAT_HEIGHT,
+  SOFA_SEAT_POS,
+  SOFA_SIZE,
+  SOFA_STAND_POS,
+  SOFA_YAW,
   WALK_CORNER_RADIUS,
   WALK_OUT_PATH,
   WALL_Z,
   cameraFor,
   fovForAspect,
+  onSofa,
   type Vec3,
 } from './layout'
 
@@ -82,6 +95,15 @@ describe('layout', () => {
     expect(LAPTOP_POS[Z]).toBeLessThan(DESK_BOUNDS.max[Z])
   })
 
+  it('stands the cup on the desktop beside the laptop, where a lean over the desk reaches it', () => {
+    expect(CUP_POS[Y]).toBe(DESK_TOP_Y)
+    // To the left of the seated character (the camera's right), clear of the laptop.
+    expect(CUP_POS[X] - LAPTOP_POS[X]).toBeGreaterThan(0.4)
+    expect(CUP_POS[Z]).toBeGreaterThan(DESK_BOUNDS.min[Z] + 0.1)
+    expect(CUP_POS[Z]).toBeLessThan(DESK_BOUNDS.max[Z] - 0.1)
+    expect(Math.hypot(CUP_POS[X] - SEAT_POS[X], CUP_POS[Z] - SEAT_POS[Z])).toBeLessThan(0.75)
+  })
+
   it('lets a seated character show above the desktop', () => {
     expect(SEAT_POS[Y] + CHARACTER_HEIGHT / 2).toBeGreaterThan(DESK_TOP_Y)
   })
@@ -93,6 +115,104 @@ describe('layout', () => {
       expect(camera.fov).toBeGreaterThan(0)
       expect(camera.fov).toBeLessThan(90)
     }
+  })
+})
+
+/** How far `point` is from an upright box's footprint (0 inside it), on the floor. */
+function distanceToFootprint(point: readonly [number, number], min: readonly [number, number], max: readonly [number, number]): number {
+  const dx = Math.max(min[0] - point[0], 0, point[0] - max[0])
+  const dz = Math.max(min[1] - point[1], 0, point[1] - max[1])
+  return Math.hypot(dx, dz)
+}
+
+/** A point of the room in the sofa's own frame: [to its left, in front of its middle]. */
+function inSofaFrame(point: Vec3): [number, number] {
+  const dx = point[X] - SOFA_POS[X]
+  const dz = point[Z] - SOFA_POS[Z]
+  const cos = Math.cos(SOFA_YAW)
+  const sin = Math.sin(SOFA_YAW)
+  return [dx * cos - dz * sin, dx * sin + dz * cos]
+}
+
+describe('the sofa', () => {
+  const { arm, back, cushion } = SOFA_SIZE
+  const cushionFront = cushion.z + cushion.depth / 2
+  const cushionBack = cushion.z - cushion.depth / 2
+  /** The arms' faces towards the cushion. */
+  const armInside = arm.x - arm.tube
+
+  it('places points given in its own frame', () => {
+    expect(onSofa(0, 0)).toEqual([SOFA_POS[X], 0, SOFA_POS[Z]])
+    const [x, z] = inSofaFrame(onSofa(0.3, -0.2))
+    expect(x).toBeCloseTo(0.3, 10)
+    expect(z).toBeCloseTo(-0.2, 10)
+    // In front of the sofa is nearer the camera, and the sofa is turned towards the middle of the room.
+    expect(onSofa(0, 1)[Z]).toBeGreaterThan(SOFA_POS[Z] + 0.9)
+    expect(onSofa(0, 1)[X]).toBeLessThan(SOFA_POS[X])
+  })
+
+  it('seats the character on the cushion, between the arms and in front of the backrest', () => {
+    const [x, z] = inSofaFrame(SOFA_SEAT_POS)
+    expect(SOFA_SEAT_POS[Y]).toBe(0)
+    expect(Math.abs(x)).toBeLessThan(1e-9)
+    // Inside the cushion's footprint...
+    expect(z).toBeGreaterThan(cushionBack)
+    expect(z).toBeLessThan(cushionFront)
+    expect(Math.abs(x)).toBeLessThan(cushion.width / 2)
+    // ...between the arms, with room for the hips...
+    expect(armInside - Math.abs(x)).toBeGreaterThan(CHARACTER_BODY_RADIUS)
+    // ...and far enough forward for the round body not to be inside the backrest.
+    expect(z - (back.z + back.tube)).toBeGreaterThan(CHARACTER_BODY_RADIUS - 0.05)
+    expect(z - (back.z + back.tube)).toBeLessThan(CHARACTER_BODY_RADIUS + 0.05)
+  })
+
+  it('lifts the seated body so that the hem of its hoodie rests on the cushion', () => {
+    expect(SOFA_SEAT_HEIGHT).toBeCloseTo(cushion.y + cushion.height / 2, 10)
+    expect(SOFA_LIFT + CHARACTER_HEM_HEIGHT).toBeCloseTo(SOFA_SEAT_HEIGHT, 10)
+    expect(SOFA_LIFT).toBeGreaterThan(0)
+  })
+
+  it('faces the seated character the way the sofa faces', () => {
+    expect(SOFA_FACING).toBe(SOFA_YAW)
+  })
+
+  it('stands the character in front of the cushion, a body radius clear of the sofa', () => {
+    const [x, z] = inSofaFrame(SOFA_STAND_POS)
+    expect(SOFA_STAND_POS[Y]).toBe(0)
+    expect(z).toBeGreaterThan(cushionFront)
+    // Clear of the cushion and of both arms.
+    expect(distanceToFootprint([x, z], [-cushion.width / 2, cushionBack], [cushion.width / 2, cushionFront])).toBeGreaterThanOrEqual(CHARACTER_BODY_RADIUS)
+    for (const side of [-1, 1]) {
+      const inner = side * armInside
+      const outer = side * (arm.x + arm.tube)
+      const reach = arm.height / 2
+      expect(distanceToFootprint([x, z], [Math.min(inner, outer), -reach], [Math.max(inner, outer), reach])).toBeGreaterThanOrEqual(CHARACTER_BODY_RADIUS)
+    }
+    // Near enough for a hop backwards onto the cushion.
+    const [, seatZ] = inSofaFrame(SOFA_SEAT_POS)
+    expect(Math.hypot(x, z - seatZ)).toBeLessThan(0.6)
+  })
+
+  it('stands the character a body radius clear of the desk and of the side table', () => {
+    const spot: [number, number] = [SOFA_STAND_POS[X], SOFA_STAND_POS[Z]]
+    expect(distanceToFootprint(spot, [DESK_BOUNDS.min[X], DESK_BOUNDS.min[Z]], [DESK_BOUNDS.max[X], DESK_BOUNDS.max[Z]])).toBeGreaterThanOrEqual(CHARACTER_BODY_RADIUS)
+    const { width, depth } = SIDE_TABLE_SIZE
+    const table = distanceToFootprint(
+      spot,
+      [SIDE_TABLE_POS[X] - width / 2, SIDE_TABLE_POS[Z] - depth / 2],
+      [SIDE_TABLE_POS[X] + width / 2, SIDE_TABLE_POS[Z] + depth / 2],
+    )
+    expect(table).toBeGreaterThanOrEqual(CHARACTER_BODY_RADIUS)
+  })
+
+  it('keeps the side table in the picture, beside the sofa and clear of the desk', () => {
+    const { width, depth } = SIDE_TABLE_SIZE
+    // The right edge of the desktop view at the table's front edge, with a hand's width to spare.
+    const front = SIDE_TABLE_POS[Z] + depth / 2
+    const halfWidth = (CAMERA.position[Z] - front) * Math.tan((CAMERA.fov * Math.PI) / 360) * CAMERA.aspect
+    expect(SIDE_TABLE_POS[X] + width / 2).toBeLessThan(CAMERA.position[X] + halfWidth - 0.08)
+    expect(SIDE_TABLE_POS[X] - width / 2).toBeGreaterThan(DESK_BOUNDS.max[X])
+    expect(SIDE_TABLE_POS[Y]).toBe(0)
   })
 })
 

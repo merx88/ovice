@@ -10,11 +10,13 @@ function clamp(value: number, limit: number): number {
 /**
  * Splits a turn of `targetYaw` (radians, relative to the way the character
  * faces) between head and body: the head turns up to its limit and the body
- * takes up the rest, up to its own limit.
+ * takes up the rest, up to its own limit. With `bodyTurns` false the body
+ * stays as it is and the head's limit is where the turn ends: for poses in
+ * which the hands rest on something the body's turn would drag them off.
  */
-export function computeLookYaw(targetYaw: number): { head: number; body: number } {
+export function computeLookYaw(targetYaw: number, bodyTurns = true): { head: number; body: number } {
   const head = clamp(targetYaw, HEAD_MAX_YAW)
-  const body = clamp(targetYaw - head, BODY_MAX_YAW)
+  const body = bodyTurns ? clamp(targetYaw - head, BODY_MAX_YAW) : 0
   return { head, body }
 }
 

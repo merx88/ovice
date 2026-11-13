@@ -15,7 +15,7 @@
 // swings it forward. For body and head, x > 0 nods forward, y > 0 turns to the
 // character's left and z > 0 tips towards its right shoulder.
 import { Euler, Quaternion } from 'three'
-import { CHARACTER_HEIGHT, SEAT_HEIGHT } from '../../scene/layout'
+import { CHARACTER_HEM_HEIGHT, SEAT_HEIGHT } from '../../scene/layout'
 
 /** The bones of the model, by the names they have in the GLB. */
 export const BONE_NAMES = [
@@ -56,6 +56,10 @@ export type ClipName =
   | 'holdFile'
   | 'sitDown'
   | 'scratchHead'
+  | 'loungeIdle'
+  | 'loungeWave'
+  | 'loungeStretch'
+  | 'loungeLookAround'
 
 export type Triple = [number, number, number]
 
@@ -199,11 +203,8 @@ export function legs(left: LegPose, right: LegPose = left): Pose {
 // their numbers do not read as simple angles. To adjust one, nudge a single
 // number and look at the result.
 
-/** The hem of the hoodie, which is what rests on the seat, as a fraction of the standing height. */
-const HEM_HEIGHT = 0.16 * CHARACTER_HEIGHT
-
-/** How far the body is lifted off the ground for the hem to rest on the seat. */
-export const SEAT_LIFT = SEAT_HEIGHT - HEM_HEIGHT
+/** How far the body is lifted off the ground for the hem of the hoodie to rest on the seat. */
+export const SEAT_LIFT = SEAT_HEIGHT - CHARACTER_HEM_HEIGHT
 
 /** Arms hanging by the sides, as far out as the wide body pushes them. */
 export const ARM_DOWN: ArmPose = { upper: [-0.22, -0.05, -0.83], fore: [0.17, 0.1, -0.45], hand: [-0.05, 0.02, 0.03] }

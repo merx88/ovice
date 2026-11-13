@@ -1,6 +1,6 @@
 import { useFrame } from '@react-three/fiber'
 import { useCallback, useRef, useState } from 'react'
-import { HANDOFF_FACING, HANDOFF_POS, SEAT_FACING, SEAT_GROUND_POS } from '../scene/layout'
+import { HANDOFF_FACING, HANDOFF_POS, SEAT_FACING, SEAT_GROUND_POS, SOFA_FACING, SOFA_SEAT_POS } from '../scene/layout'
 import { Character, type CharacterPlacement } from './Character'
 import { isLoop, type ClipReviewRequest, type ReviewPlace } from './clipReview'
 import { MAX_STEP } from './playback'
@@ -8,6 +8,7 @@ import { MAX_STEP } from './playback'
 const PLACEMENTS: Record<ReviewPlace, CharacterPlacement> = {
   desk: { position: [...SEAT_GROUND_POS], facing: SEAT_FACING },
   floor: { position: [...HANDOFF_POS], facing: HANDOFF_FACING },
+  sofa: { position: [...SOFA_SEAT_POS], facing: SOFA_FACING },
 }
 
 /** A clip played on its own holds its last pose this long (s) before it starts again. */

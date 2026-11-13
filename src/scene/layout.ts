@@ -30,6 +30,9 @@ export const DESK_BOUNDS = {
 /** Standing height the character model is scaled to. */
 export const CHARACTER_HEIGHT = 1.2
 
+/** The hem of the character's hoodie above the floor when it stands: what rests on a seat when it sits. */
+export const CHARACTER_HEM_HEIGHT = 0.16 * CHARACTER_HEIGHT
+
 /** Height of the chair's seat surface. */
 export const SEAT_HEIGHT = 0.41
 
@@ -98,10 +101,62 @@ export const BOOKSHELF_YAW = 0.19
 export const DRAWER_POS = [-0.74, 0, 0.08] as const
 export const SOFA_POS = [2.04, 0, -0.55] as const
 export const SOFA_YAW = -0.2
-export const SIDE_TABLE_POS = [2.2, 0, 0.3] as const
+/**
+ * The side table stands in front of the sofa's right arm, far enough to the
+ * right and to the front to leave the floor before the cushion free.
+ */
+export const SIDE_TABLE_POS = [2.3, 0, 0.4] as const
 export const LAMP_POS = [-0.74, DESK_TOP_Y, -0.08] as const
 /** Where the cup stands: as near the seat as it could go, because the character has to lean over to reach it. */
 export const CUP_POS = [0.55, DESK_TOP_Y, -0.17] as const
+
+// --- The sofa ---------------------------------------------------------------
+
+/**
+ * The armchair's measures, in its own frame: origin on the floor under its
+ * middle, facing +z.
+ */
+export const SOFA_SIZE = {
+  /** Each arm is a fat ring standing on the floor at x = ±`x`, seen edge-on from the front. */
+  arm: { tube: 0.125, height: 0.665, x: 0.46 },
+  /** The backrest is one tube arched between the arms. */
+  back: { tube: 0.12, radius: 0.27, baseY: 0.28, legLength: 0.25, z: -0.2 },
+  /** The cushion is a rounded box between the arms. */
+  cushion: { width: 0.72, height: 0.27, depth: 0.68, radius: 0.125, y: 0.36, z: 0.03 },
+} as const
+
+/** The side table's outer measures; its footprint is centred on its position. */
+export const SIDE_TABLE_SIZE = { width: 0.46, height: 0.47, depth: 0.3 } as const
+
+/** The point of the room that is `x` to the left of the sofa's middle and `z` in front of it, on the floor. */
+export function onSofa(x: number, z: number): Vec3 {
+  const cos = Math.cos(SOFA_YAW)
+  const sin = Math.sin(SOFA_YAW)
+  return [SOFA_POS[0] + x * cos + z * sin, 0, SOFA_POS[2] - x * sin + z * cos]
+}
+
+/** A character on the sofa faces the way the sofa does. */
+export const SOFA_FACING = SOFA_YAW
+
+/** The top of the cushion above the floor. */
+export const SOFA_SEAT_HEIGHT = SOFA_SIZE.cushion.y + SOFA_SIZE.cushion.height / 2
+
+/** How far in front of the sofa's middle the hips of a character sitting back in it are (m). */
+const SOFA_SEAT_Z = 0.22
+
+/** The floor point under the hips of a character seated on the sofa: in the middle of the cushion, its back at the backrest. */
+export const SOFA_SEAT_POS = onSofa(0, SOFA_SEAT_Z)
+
+/** How far a seated body is lifted off the floor for the hem of its hoodie to rest on the cushion. */
+export const SOFA_LIFT = SOFA_SEAT_HEIGHT - CHARACTER_HEM_HEIGHT
+
+/**
+ * Where the character stands before it hops onto the sofa, and where it lands
+ * when it hops off: on the floor in front of the cushion, its back to the
+ * sofa, a body's width clear of it. It stands a little towards the desk, which
+ * is where it comes from and goes to, and clear of the side table.
+ */
+export const SOFA_STAND_POS = onSofa(-0.14, SOFA_SIZE.cushion.z + SOFA_SIZE.cushion.depth / 2 + CHARACTER_BODY_RADIUS + 0.02)
 
 // --- Cameras ----------------------------------------------------------------
 
