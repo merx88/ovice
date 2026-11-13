@@ -14,7 +14,7 @@ import {
   type CharacterSignals,
 } from './characterSignals'
 
-const HANDING_OVER: CharacterSignals = { bubble: [...MESSAGES.done], badge: 'done', charState: 'handingFile' }
+const HANDING_OVER: CharacterSignals = { bubble: [MESSAGES.done[1]], badge: 'done', charState: 'handingFile' }
 
 describe('character signals', () => {
   it('start with a character that rests and says nothing', () => {
@@ -41,8 +41,8 @@ describe('character signals', () => {
     store.subscribe(listener)
 
     store.getState().publish(HANDING_OVER)
-    // The same lines in a list of their own are still the same bubble.
-    store.getState().publish({ ...HANDING_OVER, bubble: [...MESSAGES.done] })
+    // The same line in a list of its own is still the same bubble.
+    store.getState().publish({ ...HANDING_OVER, bubble: [MESSAGES.done[1]] })
 
     expect(listener).not.toHaveBeenCalled()
   })
@@ -52,15 +52,15 @@ describe('character signals', () => {
     store.getState().publish(HANDING_OVER)
     const held = store.getState().bubble
 
-    store.getState().publish({ ...HANDING_OVER, badge: 'idle', bubble: [...MESSAGES.done] })
+    store.getState().publish({ ...HANDING_OVER, badge: 'idle', bubble: [MESSAGES.done[1]] })
 
     expect(store.getState().badge).toBe('idle')
     expect(store.getState().bubble).toBe(held)
   })
 
   it.each<[string, Partial<CharacterSignals>]>([
-    ['a line changes', { bubble: [MESSAGES.done[0], 'Something else.'] }],
-    ['a line is added', { bubble: [...MESSAGES.done, 'One more.'] }],
+    ['the line changes', { bubble: [MESSAGES.done[0]] }],
+    ['a line is added', { bubble: [MESSAGES.done[1], 'One more.'] }],
     ['the lines go away', { bubble: [] }],
     ['the badge changes', { badge: 'error' }],
     ['the state changes', { charState: 'returning' }],
@@ -121,7 +121,7 @@ describe('the hooks for the interface', () => {
     const before = renders
 
     useCharacterSignals.getState().bubbleAnchor.current[1] += 1
-    useCharacterSignals.getState().publish({ ...HANDING_OVER, bubble: [...MESSAGES.done] })
+    useCharacterSignals.getState().publish({ ...HANDING_OVER, bubble: [MESSAGES.done[1]] })
 
     expect(renders).toBe(before)
     useCharacterSignals.getState().bubbleAnchor.current[1] -= 1

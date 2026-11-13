@@ -29,7 +29,7 @@ export const STEP_LINES = [
   'Comparing what I found...',
   'Writing up the report...',
 ]
-/** What the character says while it brings a result, first one line, then both. */
+/** What the character says while it brings a result: the first line on its way, the second in its place once it is there. */
 export const DONE_LINES = ['The research is ready.', 'Let me hand you the file.']
 export const CANCEL_LINE = 'Okay, stopping.'
 
@@ -180,7 +180,7 @@ export function progressPill(page: Page): Locator {
   return page.getByRole('group', { name: '진행 중인 작업' })
 }
 
-/** The character's speech bubbles, one per line it is saying now. */
+/** The character's speech bubble; it says one line at a time, so there is one at the most. */
 export function bubbles(page: Page): Locator {
   return page.locator('.bubbles__said p.bubble')
 }
@@ -227,9 +227,9 @@ export async function holdModel(page: Page): Promise<() => void> {
 }
 
 /**
- * Every state the character's bubbles have been in since the page was
- * loaded, oldest first: each entry is the lines that showed together, and an
- * empty entry is the character falling silent.
+ * Everything the character's bubble has shown since the page was loaded,
+ * oldest first: each entry is the lines that showed together (never more
+ * than one), and an empty entry is the character falling silent.
  */
 export function said(page: Page): Promise<string[][]> {
   return page.evaluate(() => window.__shown?.said ?? [])

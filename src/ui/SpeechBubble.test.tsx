@@ -66,18 +66,31 @@ describe('SpeechBubble: what it says', () => {
     expect(said).toHaveAttribute('lang', 'en')
   })
 
-  it('shows one bubble per line, in the order they are said', () => {
+  it('shows the line as one bubble', () => {
     render(<SpeechBubble />)
-    say('The research is ready.', 'Let me hand you the file.')
+    say('The research is ready.')
     const bubbles = [...screen.getByRole('status').children]
-    expect(bubbles.map((bubble) => bubble.textContent)).toEqual(['The research is ready.', 'Let me hand you the file.'])
+    expect(bubbles.map((bubble) => bubble.textContent)).toEqual(['The research is ready.'])
+    expect(bubbles[0]).toHaveClass('bubble')
   })
 
-  it('keeps the first bubble where it is when a second line follows', () => {
+  it('puts a new bubble in the place of the old one when the character says another line', () => {
     render(<SpeechBubble />)
     say('The research is ready.')
     const first = screen.getByText('The research is ready.')
-    say('The research is ready.', 'Let me hand you the file.')
+    say('Let me hand you the file.')
+    const bubbles = [...screen.getByRole('status').children]
+    expect(bubbles.map((bubble) => bubble.textContent)).toEqual(['Let me hand you the file.'])
+    // Another element, not the old one with other words: it comes in the way every bubble does.
+    expect(bubbles[0]).not.toBe(first)
+    expect(first).not.toBeInTheDocument()
+  })
+
+  it('keeps the bubble it shows while the same line is said again', () => {
+    render(<SpeechBubble />)
+    say('The research is ready.')
+    const first = screen.getByText('The research is ready.')
+    say('The research is ready.')
     expect(screen.getByText('The research is ready.')).toBe(first)
   })
 

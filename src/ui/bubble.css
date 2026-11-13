@@ -1,28 +1,23 @@
 /*
- * The speech bubbles beside the character's head. They are drawn inside the
- * canvas' own HTML layer (see SpeechBubble.tsx), at the point the element
- * `.bubbles` is moved to on every frame: the first bubble's left edge starts
- * there, with the bubble's middle at that height. Sizes are the reference's
- * (1728 px wide), in design units (`--u`, see ui.css).
+ * The speech bubble beside the character's head: one line at a time. It is
+ * drawn inside the canvas' own HTML layer (see SpeechBubble.tsx), at the
+ * point the element `.bubbles` is moved to on every frame: the bubble's left
+ * edge starts there, with the middle of a one-line bubble at that height.
+ * Sizes are the reference's (1728 px wide), in design units (`--u`, see ui.css).
  */
 
 .bubbles {
-  /* The folder's button lies under the bubbles and has to stay clickable. */
+  /* The folder's button lies under the bubble and has to stay clickable. */
   pointer-events: none;
-  /* How far the bubbles may reach to the right; set from SpeechBubble.tsx as the character moves. */
+  /* How far the bubble may reach to the right; set from SpeechBubble.tsx as the character moves. */
   --room: 100vw;
-  /* Each further bubble starts this much further right, as in the reference — less where room is short. */
-  --stagger: clamp(0px, calc(var(--room) - var(--u) * 300), calc(var(--u) * 110));
 }
 
 .bubbles__said {
   position: absolute;
   top: calc(var(--u) * -30);
   left: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: calc(var(--u) * 5);
+  /* As wide as its line, and wrapping where the view leaves less room than that. */
   width: max-content;
   max-width: var(--room);
 }
@@ -46,14 +41,6 @@
   letter-spacing: -0.03em;
   overflow-wrap: anywhere;
   animation: bubble-in 180ms ease-out;
-}
-
-.bubble:nth-child(2) {
-  margin-left: var(--stagger);
-}
-
-.bubble:nth-child(n + 3) {
-  margin-left: calc(var(--stagger) * 2);
 }
 
 @keyframes bubble-in {

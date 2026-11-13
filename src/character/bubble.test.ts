@@ -7,6 +7,7 @@ import {
   bubbleFor,
   bubbleLift,
   CANCEL_BUBBLE_MS,
+  DONE_FIRST_LINE_MS,
   type BubbleContext,
 } from './bubble'
 import type { AgentStep } from '../store/tasks'
@@ -33,8 +34,12 @@ const STEPS: readonly (AgentStep | null)[] = [null, 'reading', 'searching', 'com
 const SEATED_IDLE: readonly CharState[] = ['resting', 'watching', 'greeting', 'fidgeting']
 
 function context(patch: Partial<BubbleContext> = {}): BubbleContext {
-  return { state: 'resting', queued: null, message: null, sinceCancel: null, ...patch }
+  return { state: 'resting', queued: null, message: null, sinceCancel: null, sinceDone: null, ...patch }
 }
+
+/** What the character says in `state`, `sinceDone` ms after it began to announce a result. */
+const said = (state: CharState, sinceDone: number | null) =>
+  bubbleFor({ state, queued: null, message: null, sinceCancel: null, sinceDone })
 
 describe('badgeForState', () => {
   it.each<[CharState, BadgeStatus]>([
@@ -110,13 +115,41 @@ describe('bubbleFor', () => {
     expect(bubbleFor(context({ state: 'returning', queued, message: STEP_MESSAGES.writing }))).toEqual([])
   })
 
-  it.each<CharState>(['standingUp', 'walkingOut'])('announces the result while %s', (state) => {
-    expect(bubbleFor(context({ state }))).toEqual(['The research is ready.'])
+  it.each<CharState>(['standingUp', 'walkingOut'])('announces the result while %s, however long that takes', (state) => {
+    for (const sinceDone of [null, 0, 1499, 1500, 60_000]) {
+      expect(bubbleFor(context({ state, sinceDone }))).toEqual(['The research is ready.'])
+    }
   })
 
-  it('says both lines while handing the file over', () => {
-    expect(bubbleFor(context({ state: 'handingFile' }))).toEqual(['The research is ready.', 'Let me hand you the file.'])
-    expect(bubbleFor(context({ state: 'handingFile' }))).toEqual([...MESSAGES.done])
+  it('says the two hand-over lines one after the other', () => {
+    expect(said('standingUp', 0)).toEqual(['The research is ready.'])
+    expect(said('walkingOut', 900)).toEqual(['The research is ready.'])
+    expect(said('handingFile', 1499)).toEqual(['The research is ready.'])
+    expect(said('handingFile', 1500)).toEqual(['Let me hand you the file.'])
+    expect(said('handingFile', null)).toEqual(['Let me hand you the file.'])
+  })
+
+  it('gives the first line a second and a half, also where the character is there at once', () => {
+    expect(DONE_FIRST_LINE_MS).toBe(1500)
+    expect(said('handingFile', 0)).toEqual([MESSAGES.done[0]])
+    expect(said('handingFile', DONE_FIRST_LINE_MS - 1)).toEqual([MESSAGES.done[0]])
+    expect(said('handingFile', DONE_FIRST_LINE_MS)).toEqual([MESSAGES.done[1]])
+    expect(said('handingFile', 3_600_000)).toEqual([MESSAGES.done[1]])
+  })
+
+  it('never says two lines at once', () => {
+    for (const state of STATES) {
+      for (const queued of QUEUED) {
+        for (const sinceDone of [null, 0, 5000]) {
+          for (const sinceCancel of [null, 0, 5000]) {
+            for (const message of [null, 'a progress line']) {
+              const lines = bubbleFor({ state, queued, message, sinceCancel, sinceDone })
+              expect(lines.length, `${state}, ${queued} queued`).toBeLessThanOrEqual(1)
+            }
+          }
+        }
+      }
+    }
   })
 
   it('reports an error by the state, not by the last progress line the failed task left behind', () => {
@@ -147,7 +180,7 @@ describe('bubbleFor', () => {
   it.each<[CharState, readonly string[]]>([
     ['standingUp', [MESSAGES.done[0]]],
     ['walkingOut', [MESSAGES.done[0]]],
-    ['handingFile', MESSAGES.done],
+    ['handingFile', [MESSAGES.done[1]]],
     ['error', [MESSAGES.error]],
   ])('lets what it is doing while %s outrank the stopping line', (state, lines) => {
     expect(bubbleFor(context({ state, sinceCancel: 100 }))).toEqual(lines)
@@ -155,7 +188,7 @@ describe('bubbleFor', () => {
 
   it('hands out its own list each time, safe to keep', () => {
     const first = bubbleFor(context({ state: 'handingFile' }))
-    expect(first).not.toBe(MESSAGES.done)
+    expect(first).toEqual([MESSAGES.done[1]])
     expect(bubbleFor(context({ state: 'handingFile' }))).not.toBe(first)
   })
 
@@ -164,8 +197,10 @@ describe('bubbleFor', () => {
     for (const state of STATES) {
       for (const queued of QUEUED) {
         for (const sinceCancel of [null, 0, 5000]) {
-          for (const message of [null, 'a progress line']) {
-            for (const line of bubbleFor({ state, queued, message, sinceCancel })) expect(allowed).toContain(line)
+          for (const sinceDone of [null, 0, 5000]) {
+            for (const message of [null, 'a progress line']) {
+              for (const line of bubbleFor({ state, queued, message, sinceCancel, sinceDone })) expect(allowed).toContain(line)
+            }
           }
         }
       }

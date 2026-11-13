@@ -18,7 +18,14 @@ import {
 import { useCharacterSignals } from '../store/characterSignals'
 import { useSettings } from '../store/settings'
 import { useTasks, type Task } from '../store/tasks'
-import { badgeForState, bubbleAnchorAt, bubbleFor, bubbleLift, CANCEL_BUBBLE_MS } from './bubble'
+import {
+  badgeForState,
+  bubbleAnchorAt,
+  bubbleFor,
+  bubbleLift,
+  CANCEL_BUBBLE_MS,
+  DONE_FIRST_LINE_MS,
+} from './bubble'
 import type { CharacterPlacement, CharacterProps } from './Character'
 import { clipAwaitedBy, clipSpeedFor, clipToPlay, WALK_PACE } from './clipForState'
 import type { ClipName } from './clips'
@@ -28,7 +35,7 @@ import { LOOK_EDGE_YAW } from './constants'
 import { damp, lookPlaneDistance } from './lookAt'
 import { measurePath, roundCorners, samplePath, stepWalker, turnBetween, type PathSample, type Walker } from './path'
 import { MAX_STEP } from './playback'
-import { initialMachine, transition, type CharEvent, type CharMachine } from './stateMachine'
+import { initialMachine, transition, type CharEvent, type CharMachine, type CharState } from './stateMachine'
 import type { BadgeStatus } from './statusSymbols'
 import { runningTask, taskEvents, taskEventsAtFirstSight, type TasksSnapshot } from './taskEvents'
 
@@ -66,6 +73,10 @@ interface Driver {
   handoverTaskId: string | null
   /** When a task was last cancelled (ms), until the line about it has been said or another task starts. */
   cancelledAt: number | null
+  /** When the character began to announce the result it is bringing out (ms); null while it brings none. */
+  announcedAt: number | null
+  /** When the first line of the hand-over has had its time (ms), until that moment has been acted on. */
+  firstLineOverAt: number | null
   /** Where the pointer last was, in CSS pixels from the viewport's top left. */
   pointer: { x: number; y: number }
   /** How far the bubble's anchor is raised for sitting, on its way to where it belongs. */
@@ -83,6 +94,8 @@ function createDriver(now: number): Driver {
     seen: null,
     handoverTaskId: null,
     cancelledAt: null,
+    announcedAt: null,
+    firstLineOverAt: null,
     pointer: { x: 0, y: 0 },
     lift: SEAT_LIFT,
     placement: { position: [...SEAT_GROUND_POS], facing: SEAT_FACING },
@@ -98,6 +111,11 @@ function viewOf({ machine, backAtSeat }: Driver, running: Task | undefined): Vie
     holdingFile: machine.state === 'handingFile',
     looking: machine.state === 'watching' || machine.state === 'greeting',
   }
+}
+
+/** Whether the character is bringing a result out: from standing up to holding the file. */
+function isHandingOver(state: CharState): boolean {
+  return state === 'standingUp' || state === 'walkingOut' || state === 'handingFile'
 }
 
 function sameView(a: View, b: View): boolean {
@@ -147,6 +165,8 @@ export function useCharacterDriver(): CharacterProps {
   const held = useRef<Driver | null>(null)
   const driver = (held.current ??= createDriver(performance.now()))
   const [view, setView] = useState(() => viewOf(driver, runningTask(useTasks.getState())))
+  /** The view last handed to React, which may not have rendered it yet. */
+  const asked = useRef(view)
   /** The clip of the latest render, which is the one the character can have seen. */
   const renderedClip = useRef(view.clip)
   renderedClip.current = view.clip
@@ -156,7 +176,11 @@ export function useCharacterDriver(): CharacterProps {
     (now: number) => {
       const running = runningTask(useTasks.getState())
       const next = viewOf(driver, running)
-      setView((current) => (sameView(current, next) ? current : next))
+      // Only a view that differs is handed to React: being asked to keep what it has can cost it a render all the same.
+      if (!sameView(asked.current, next)) {
+        asked.current = next
+        setView(next)
+      }
       const { state, queued } = driver.machine
       useCharacterSignals.getState().publish({
         bubble: bubbleFor({
@@ -164,6 +188,7 @@ export function useCharacterDriver(): CharacterProps {
           queued,
           message: running?.message ?? null,
           sinceCancel: driver.cancelledAt === null ? null : now - driver.cancelledAt,
+          sinceDone: driver.announcedAt === null ? null : now - driver.announcedAt,
         }),
         badge: next.badge,
         charState: state,
@@ -180,6 +205,11 @@ export function useCharacterDriver(): CharacterProps {
       if (after === before) return false
       driver.machine = after
       if (after.state !== before.state) driver.backAtSeat = false
+      if (isHandingOver(after.state) !== isHandingOver(before.state)) {
+        // The first line of the hand-over is said from here on, or the hand-over is over.
+        driver.announcedAt = isHandingOver(after.state) ? now : null
+        driver.firstLineOverAt = isHandingOver(after.state) ? now + DONE_FIRST_LINE_MS : null
+      }
       if (after.state !== before.state || after.fidget !== before.fidget || after.queued !== before.queued) sync(now)
       return true
     },
@@ -251,6 +281,11 @@ export function useCharacterDriver(): CharacterProps {
     dispatch(tick, now)
     if (driver.cancelledAt !== null && now - driver.cancelledAt >= CANCEL_BUBBLE_MS) {
       driver.cancelledAt = null
+      sync(now)
+    }
+    if (driver.firstLineOverAt !== null && now >= driver.firstLineOverAt) {
+      // A character that has already arrived goes on to its second line now.
+      driver.firstLineOverAt = null
       sync(now)
     }
 

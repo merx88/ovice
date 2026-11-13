@@ -101,8 +101,8 @@ test.describe('on a connection so slow that the task is over before the characte
     letModelThrough()
 
     // It arrives, finds the result waiting and brings it out: nothing about the steps it never saw.
-    await expect(bubbles(page)).toHaveText(DONE_LINES, { timeout: HANDOVER_TIMEOUT })
-    expect(await said(page)).toEqual([[DONE_LINES[0]], DONE_LINES])
+    await expect(bubbles(page)).toHaveText([DONE_LINES[1]], { timeout: HANDOVER_TIMEOUT })
+    expect(await said(page)).toEqual([[DONE_LINES[0]], [DONE_LINES[1]]])
     await folder(page).press('Enter')
     await expect(viewer(page)).toHaveAccessibleName(prompt)
   })

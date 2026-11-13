@@ -42,13 +42,17 @@ test('a prompt is worked on, and its result is brought out, opened and listed as
   await send(page, prompt)
   await expect.poll(() => pillTexts(page)).toEqual([prompt])
 
-  // The character stands up, walks round its desk and holds the result out.
-  await expect(bubbles(page)).toHaveText(DONE_LINES, { timeout: HANDOVER_TIMEOUT })
+  // The character stands up, walks round its desk and holds the result out: one bubble, saying the second line.
+  await expect(bubbles(page)).toHaveText([DONE_LINES[1]], { timeout: HANDOVER_TIMEOUT })
   await expect(promptField(page)).toBeVisible()
-  // On the way it said nothing but its lines, and never said it was stopping.
-  for (const lines of await said(page)) {
+  // On the way it said nothing but its lines, one at a time, and never said it was stopping.
+  const history = await said(page)
+  for (const lines of history) {
+    expect(lines.length).toBeLessThanOrEqual(1)
     for (const line of lines) expect([...STEP_LINES, ...DONE_LINES]).toContain(line)
   }
+  // The first line of the hand-over came before the second, which took its place.
+  expect(history.slice(-2)).toEqual([[DONE_LINES[0]], [DONE_LINES[1]]])
 
   // The folder in its hands opens the result.
   await folder(page).click()
@@ -138,7 +142,7 @@ test.describe('after a reload', () => {
 
     // It is there, though, and brings out what is asked of it now.
     await send(page, second)
-    await expect(bubbles(page)).toHaveText(DONE_LINES, { timeout: HANDOVER_TIMEOUT })
+    await expect(bubbles(page)).toHaveText([DONE_LINES[1]], { timeout: HANDOVER_TIMEOUT })
     const broughtOut = (await said(page)).filter((lines) => lines.length === 1 && lines[0] === DONE_LINES[0])
     expect(broughtOut).toHaveLength(1)
     // The folder is a button, so the keyboard opens it too.

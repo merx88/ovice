@@ -5,7 +5,7 @@ import { useBubble, useBubbleAnchor } from '../store/characterSignals'
 import { useSettings } from '../store/settings'
 import './bubble.css'
 
-/** The bubbles keep this far (px) from the right edge of the view. */
+/** The bubble keeps this far (px) from the right edge of the view. */
 export const BUBBLE_VIEW_MARGIN = 16
 /** A bubble is never left less room (px) than this; in a view too narrow for that it moves left instead. */
 export const BUBBLE_MIN_ROOM = 96
@@ -18,9 +18,9 @@ interface ViewSize {
 const projected = new Vector3()
 
 /**
- * Where the bubbles go in the view, in pixels from its top left: the point the
- * first bubble's left edge starts from, at the height of its middle, and how
- * much `room` there is from there to the right edge, less the margin.
+ * Where the bubble goes in the view, in pixels from its top left: the point
+ * its left edge starts from, at the height of its middle, and how much `room`
+ * there is from there to the right edge, less the margin.
  */
 export function placeBubbles(
   anchor: readonly [number, number, number],
@@ -35,9 +35,10 @@ export function placeBubbles(
 }
 
 /**
- * What the character says, as bubbles beside its head. This is the one piece
- * of the interface that lives inside the canvas, because it follows a point in
- * the 3D scene: the anchor the character's driver moves on every frame.
+ * What the character says, as a bubble beside its head: one line at a time, a
+ * new bubble taking the place of the last. This is the one piece of the
+ * interface that lives inside the canvas, because it follows a point in the
+ * 3D scene: the anchor the character's driver moves on every frame.
  */
 export function SpeechBubble() {
   const lines = useBubble()
@@ -73,8 +74,9 @@ export function SpeechBubble() {
     >
       {/* Always there, so that screen readers notice a line arriving. The lines are English on a Korean page. */}
       <div className="bubbles__said" role="status" aria-live="polite" lang="en">
-        {lines.map((line, index) => (
-          <p key={`${index}:${line}`} className="bubble">
+        {/* Keyed by what it says: another line is another bubble, and comes in the way every bubble does. */}
+        {lines.map((line) => (
+          <p key={line} className="bubble">
             {line}
           </p>
         ))}

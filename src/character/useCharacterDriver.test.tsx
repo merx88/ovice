@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react'
 import { StrictMode, type JSXElementConstructor, type ReactNode } from 'react'
 import { PerspectiveCamera } from 'three'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { MESSAGES, STEP_MESSAGES } from '../agent/messages'
 import * as env from '../app/env'
 import {
@@ -16,7 +16,7 @@ import {
 import { useCharacterSignals } from '../store/characterSignals'
 import { useSettings } from '../store/settings'
 import { useTasks, type Task } from '../store/tasks'
-import { bubbleAnchorAt } from './bubble'
+import { bubbleAnchorAt, DONE_FIRST_LINE_MS } from './bubble'
 import { WALK_PACE } from './clipForState'
 import { CLIPS, type ClipName } from './clips'
 import { SEAT_LIFT } from './clips/shared'
@@ -418,8 +418,8 @@ describe('useCharacterDriver', () => {
       // One render for arriving; none for the steps on the way.
       expect(stage.renders() - renders).toBeLessThanOrEqual(1)
 
-      // Holding out the folder, in front of the desk, facing the camera.
-      expect(signals()).toEqual({ bubble: [...MESSAGES.done], badge: 'done', charState: 'handingFile' })
+      // Holding out the folder, in front of the desk, facing the camera: the second line has taken the first one's place.
+      expect(signals()).toEqual({ bubble: [MESSAGES.done[1]], badge: 'done', charState: 'handingFile' })
       expect(stage.props()).toMatchObject({ clip: 'holdFile', clipSpeed: 1, holdingFile: true, badge: 'done' })
       stage.run(1)
       expect(stage.props().placement).toEqual({ position: [...HANDOFF_POS], facing: HANDOFF_FACING })
@@ -544,7 +544,7 @@ describe('useCharacterDriver', () => {
       expect(walked).toBeLessThan(3.8)
 
       // ...and holding out the folder, which opens that result.
-      expect(signals()).toEqual({ bubble: [...MESSAGES.done], badge: 'done', charState: 'handingFile' })
+      expect(signals()).toEqual({ bubble: [MESSAGES.done[1]], badge: 'done', charState: 'handingFile' })
       expect(stage.props()).toMatchObject({ clip: 'holdFile', holdingFile: true })
       act(() => stage.props().onFolderClick())
       expect(useTasks.getState().viewingId).toBe('new')
@@ -634,6 +634,119 @@ describe('useCharacterDriver', () => {
       })
       expect([...states]).toEqual(['standingUp', 'walkingOut', 'handingFile'])
       expect(out).toBeLessThan((CLIPS.standUp.duration as number) + 3.8)
+    })
+  })
+
+  describe('the two lines of the hand-over', () => {
+    /** Every bubble the interface is told about from now on, in order. */
+    function bubblesSaid(): string[][] {
+      const seen: string[][] = []
+      onTestFinished(
+        useCharacterSignals.subscribe((state, previous) => {
+          if (state.bubble !== previous.bubble) seen.push(state.bubble)
+        }),
+      )
+      return seen
+    }
+
+    it('are said one after the other: the first on the way, the second once the character has arrived', () => {
+      const stage = mount()
+      const task = startTask()
+      update(task.id, { step: 'writing', message: STEP_MESSAGES.writing })
+      stage.run(0.5)
+      const seen = bubblesSaid()
+      finish(task.id)
+
+      stage.untilState('handingFile')
+      stage.run(3)
+      expect(seen).toEqual([[MESSAGES.done[0]], [MESSAGES.done[1]]])
+      // And it goes on saying the second for as long as it holds the file out.
+      stage.run(10)
+      expect(signals().bubble).toEqual([MESSAGES.done[1]])
+      expect(seen).toHaveLength(2)
+    })
+
+    it('give the first line a second and a half where the character does not walk', () => {
+      useSettings.setState({ reduceMotion: true })
+      const stage = mount()
+      const task = startTask()
+      stage.run(0.5)
+      finish(task.id)
+      const saidAt = clock
+      expect(signals().bubble).toEqual([MESSAGES.done[0]])
+
+      // It is in front of the desk as soon as it has stood up, well within that time...
+      stage.untilState('handingFile')
+      expect(clock - saidAt).toBeLessThan(DONE_FIRST_LINE_MS)
+      expect(signals().bubble).toEqual([MESSAGES.done[0]])
+      expect(stage.props().holdingFile).toBe(true)
+
+      // ...and still says the first line until its time is up.
+      stage.until(() => signals().bubble[0] === MESSAGES.done[1])
+      expect(clock - saidAt).toBeGreaterThanOrEqual(DONE_FIRST_LINE_MS)
+      expect(clock - saidAt).toBeLessThan(DONE_FIRST_LINE_MS + 2 * FRAME * 1000)
+      expect(signals()).toEqual({ bubble: [MESSAGES.done[1]], badge: 'done', charState: 'handingFile' })
+    })
+
+    it('are timed afresh for every result that is brought out', () => {
+      useSettings.setState({ reduceMotion: true })
+      const stage = mount()
+      for (const prompt of ['first', 'second']) {
+        const task = startTask(prompt)
+        stage.run(0.5)
+        finish(task.id)
+        const saidAt = clock
+        stage.until(() => signals().bubble[0] === MESSAGES.done[1])
+        expect(clock - saidAt).toBeGreaterThanOrEqual(DONE_FIRST_LINE_MS)
+        expect(clock - saidAt).toBeLessThan(DONE_FIRST_LINE_MS + 2 * FRAME * 1000)
+        act(() => stage.props().onFolderClick())
+        act(() => useTasks.getState().setViewing(null))
+        expect(signals().bubble).toEqual([])
+        stage.untilState('resting')
+        // Long after the first result: its line's time must not count for the second.
+        stage.run(4)
+      }
+    })
+
+    it('do not render the character again when the second takes the place of the first', () => {
+      useSettings.setState({ reduceMotion: true })
+      const stage = mount()
+      finish(startTask().id)
+      stage.untilState('handingFile')
+      stage.run(0.1)
+      const renders = stage.renders()
+      stage.until(() => signals().bubble[0] === MESSAGES.done[1])
+      stage.run(1)
+      expect(stage.renders()).toBe(renders)
+    })
+
+    it('are never said together, nor with anything else, whatever happens meanwhile', () => {
+      const seen = bubblesSaid()
+      const stage = mount()
+      const first = startTask('first')
+      update(first.id, { step: 'searching', message: STEP_MESSAGES.searching })
+      stage.run(0.5)
+      finish(first.id)
+      stage.untilState('handingFile')
+      stage.run(2)
+      // A second task while the file is held out, cancelled on the way back; then a third that is brought out.
+      const second = startTask('second')
+      update(second.id, { step: 'reading', message: STEP_MESSAGES.reading })
+      stage.run(0.5)
+      cancel(second.id)
+      stage.run(0.5)
+      const third = startTask('third')
+      stage.run(0.3)
+      finish(third.id)
+      stage.untilState('handingFile')
+      stage.run(2)
+      act(() => stage.props().onFolderClick())
+      act(() => useTasks.getState().setViewing(null))
+      stage.untilState('resting')
+
+      expect(seen.length).toBeGreaterThan(6)
+      for (const bubble of seen) expect(bubble.length).toBeLessThanOrEqual(1)
+      expect(seen.filter(([line]) => line === MESSAGES.done[1])).toHaveLength(2)
     })
   })
 

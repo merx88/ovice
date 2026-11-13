@@ -23,7 +23,7 @@ export interface BubbleAnchor {
 
 /** The signals that change rarely: subscribers are told when one of them does. */
 export interface CharacterSignals {
-  /** The lines of the speech bubble, in the order they are said; empty when the character says nothing. */
+  /** What the character says: one line at the most; empty when it says nothing. */
   bubble: string[]
   /** The status the icon above the character's head shows. */
   badge: BadgeStatus
@@ -64,7 +64,7 @@ export function createCharacterSignalsStore() {
 
 export const useCharacterSignals = createCharacterSignalsStore()
 
-/** The lines of the speech bubble; renders again only when a line changes. */
+/** What the character says, one line at the most; renders again only when it changes. */
 export const useBubble = (): string[] => useCharacterSignals((state) => state.bubble)
 
 /** The status above the character's head; renders again only when it changes. */

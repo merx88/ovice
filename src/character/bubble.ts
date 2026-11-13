@@ -14,6 +14,13 @@ type Queued = CharMachine['queued']
 /** How long the character keeps saying that it is stopping after a task was cancelled. */
 export const CANCEL_BUBBLE_MS = 2000
 
+/**
+ * How long the first of the two hand-over lines is said at the least. The
+ * second takes its place when the character has arrived, but not before this
+ * is up: without a walk it arrives before anybody could have read the first.
+ */
+export const DONE_FIRST_LINE_MS = 1500
+
 export interface BubbleContext {
   state: CharState
   queued: Queued
@@ -21,14 +28,17 @@ export interface BubbleContext {
   message: string | null
   /** Milliseconds since a task was last cancelled; null when none was, or a task has started since. */
   sinceCancel: number | null
+  /** Milliseconds since the character began to announce the result it is bringing out; null when that is not known. */
+  sinceDone: number | null
 }
 
 /**
- * The lines of the speech bubble, in the order they are said; empty when the
- * character has nothing to say. What the character is doing comes first; the
- * line about stopping only shows while nothing else is going on.
+ * What the character says: one line at the most, as a list, which is empty
+ * when it has nothing to say. What the character is doing comes first; the
+ * line about stopping only shows while nothing else is going on. The two
+ * lines of a hand-over are said one after the other, never together.
  */
-export function bubbleFor({ state, queued, message, sinceCancel }: BubbleContext): string[] {
+export function bubbleFor({ state, queued, message, sinceCancel, sinceDone }: BubbleContext): string[] {
   switch (state) {
     case 'working':
       return message === null ? [] : [message]
@@ -36,7 +46,8 @@ export function bubbleFor({ state, queued, message, sinceCancel }: BubbleContext
     case 'walkingOut':
       return [MESSAGES.done[0]]
     case 'handingFile':
-      return [...MESSAGES.done]
+      // Arrived: the second line takes the place of the first, once the first has had its time.
+      return [sinceDone !== null && sinceDone < DONE_FIRST_LINE_MS ? MESSAGES.done[0] : MESSAGES.done[1]]
     case 'error':
       return [MESSAGES.error]
     case 'returning':
