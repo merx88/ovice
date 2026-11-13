@@ -29,6 +29,8 @@ export default defineConfig({
     rollupOptions: { output: { manualChunks: vendorChunk } },
   },
   test: {
+    // The unit tests live beside the code. `e2e/` holds Playwright's specs, which are not Vitest's to run.
+    include: ['src/**/*.test.{ts,tsx}'],
     environment: 'jsdom',
     setupFiles: 'src/test/setup.ts',
     // Stylesheets stay switched off in tests, except where a test asks for one as text (`?raw`).
