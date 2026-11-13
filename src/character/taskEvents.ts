@@ -57,7 +57,10 @@ export function taskEvents(previous: TasksSnapshot, next: TasksSnapshot): TaskEv
  * The result that is still waiting to be handed over in a store nobody has
  * watched so far: that of the newest task, if the task finished with one
  * during this page load and the viewer is not already showing it. Tasks are
- * kept newest first, and `pageLoadedAt` is on the clock `createdAt` is read from.
+ * kept newest first. `pageLoadedAt` has to be a reading of the clock
+ * `createdAt` is stamped from, the wall clock (`Date.now()`); the page's own
+ * time origin is counted on another one, which falls behind while a computer
+ * sleeps.
  */
 function waitingResult(found: TasksSnapshot, pageLoadedAt: number): Task | undefined {
   const newest: Task | undefined = found.tasks[0]

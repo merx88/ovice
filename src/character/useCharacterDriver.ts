@@ -6,6 +6,7 @@
 import { useFrame } from '@react-three/fiber'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { PerspectiveCamera, Vector3 } from 'three'
+import { PAGE_LOADED_AT } from '../app/env'
 import {
   CHARACTER_HEIGHT,
   HANDOFF_FACING,
@@ -215,9 +216,9 @@ export function useCharacterDriver(): CharacterProps {
     const onTasks = (tasks: TasksSnapshot) => {
       const now = performance.now()
       // The first sight comes once in the driver's life, however often this effect is set up.
-      // `timeOrigin` is when the page was loaded, in the milliseconds since 1970 a task is stamped with.
+      // The page-load time is a reading of the wall clock, as the time a task is stamped with is.
       const events =
-        driver.seen === null ? taskEventsAtFirstSight(tasks, performance.timeOrigin) : taskEvents(driver.seen, tasks)
+        driver.seen === null ? taskEventsAtFirstSight(tasks, PAGE_LOADED_AT) : taskEvents(driver.seen, tasks)
       for (const event of events) {
         if (event.type === 'taskStarted') driver.cancelledAt = null
         if (event.type === 'taskCancelled') driver.cancelledAt = now

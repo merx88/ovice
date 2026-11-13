@@ -3,6 +3,7 @@ import { StrictMode, type JSXElementConstructor, type ReactNode } from 'react'
 import { PerspectiveCamera } from 'three'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MESSAGES, STEP_MESSAGES } from '../agent/messages'
+import * as env from '../app/env'
 import {
   CAMERA,
   CHARACTER_BODY_RADIUS,
@@ -493,7 +494,7 @@ describe('useCharacterDriver', () => {
     const RESTING = { bubble: [], badge: 'idle', charState: 'resting' }
 
     beforeEach(() => {
-      vi.spyOn(performance, 'timeOrigin', 'get').mockReturnValue(LOADED_AT)
+      vi.spyOn(env, 'PAGE_LOADED_AT', 'get').mockReturnValue(LOADED_AT)
     })
 
     /** A finished task as the store holds it, created `afterLoad` ms after the page was loaded: before it, if negative. */
@@ -550,6 +551,24 @@ describe('useCharacterDriver', () => {
 
     it('counts from the millisecond the page was loaded', () => {
       found([finished('first', 0)])
+      mount()
+      expect(signals().charState).toBe('standingUp')
+    })
+
+    // The page's own time origin is counted on a clock that stands still while the computer sleeps, so it can
+    // read hours before the page was really loaded; a task is stamped by the wall clock.
+    it('goes by the wall clock where the time origin of the page has fallen behind it', () => {
+      vi.spyOn(performance, 'timeOrigin', 'get').mockReturnValue(LOADED_AT - 3_600_000)
+      found([finished('before the reload', -5_000)])
+      const stage = mount()
+      stage.run(3)
+      expect(signals()).toEqual(RESTING)
+      expect(stage.props()).toMatchObject({ clip: 'idle', holdingFile: false })
+    })
+
+    it('goes by the wall clock where the time origin of the page is ahead of it', () => {
+      vi.spyOn(performance, 'timeOrigin', 'get').mockReturnValue(LOADED_AT + 3_600_000)
+      found([finished('new', 5_000)])
       mount()
       expect(signals().charState).toBe('standingUp')
     })

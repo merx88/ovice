@@ -106,9 +106,13 @@ test.describe('after a reload', () => {
     const second = 'Summarise what changed in the plan'
     await page.goto('/?fast=1')
     await send(page, first)
+    // The pill has to have been there before its absence says that the task is over.
+    await expect.poll(() => pillTexts(page)).toEqual([first])
     await expect(progressPill(page)).toHaveCount(0)
     await expect(promptField(page)).toBeVisible()
 
+    // The wall clock, which is what a task is stamped by and what the page notes as it starts.
+    const reloadedAt = Date.now()
     await page.reload()
 
     // The task and its result came back from storage.
@@ -120,11 +124,11 @@ test.describe('after a reload', () => {
     await expect(panel).toHaveCount(0)
 
     // What the character goes by: the task is older than this page.
-    const age = await page.evaluate(() => {
+    const createdAt = await page.evaluate(() => {
       const [task] = JSON.parse(localStorage.getItem('ovice.tasks.v1') ?? '[]') as { createdAt: number }[]
-      return { createdAt: task.createdAt, pageLoadedAt: performance.timeOrigin }
+      return task.createdAt
     })
-    expect(age.createdAt).toBeLessThan(age.pageLoadedAt)
+    expect(createdAt).toBeLessThan(reloadedAt)
 
     // So when the character appears it leaves that result alone. (As far as a
     // test can tell: see `characterLoaded` for how sure it is that it has appeared.)
