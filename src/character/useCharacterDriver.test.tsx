@@ -269,6 +269,8 @@ describe('useCharacterDriver', () => {
     })
 
     it('does not wave again so soon, but does once enough time has passed', () => {
+      // The last fidget in the list, a short one: after a sip the eight seconds would nearly be over.
+      vi.mocked(Math.random).mockReturnValue(0.99)
       const stage = mount()
       pointer('pointermove', 200, 150)
       stage.untilState('greeting')
@@ -288,15 +290,57 @@ describe('useCharacterDriver', () => {
     })
 
     it('stops a fidget to look at the pointer again', () => {
+      // The second fidget in the list: a stretch.
+      vi.mocked(Math.random).mockReturnValue(0.3)
       const stage = mount()
       pointer('pointermove', 200, 150)
       stage.untilState('fidgeting')
+      stage.frame()
+      expect(stage.props().clip).toBe('stretch')
       stage.run(0.5)
       pointer('pointermove', 900, 400)
       expect(signals().charState).toBe('watching')
       stage.frame()
       expect(stage.props().clip).toBe('idle')
       expect(stage.props().lookTarget).not.toBeNull()
+    })
+
+    it('finishes a sip before it looks at the pointer again', () => {
+      const stage = mount()
+      pointer('pointermove', 200, 150)
+      stage.untilState('fidgeting')
+      stage.frame()
+      expect(stage.props().clip).toBe('sip')
+      stage.run(0.5)
+      pointer('pointermove', 900, 400)
+      // The cup is in its hand: it neither turns to the pointer nor drops the sip.
+      expect(signals().charState).toBe('fidgeting')
+      stage.frame()
+      expect(stage.props()).toMatchObject({ clip: 'sip', lookTarget: null })
+      const rest = stage.untilState('resting')
+      expect(rest).toBeGreaterThan(1)
+      expect(stage.props().lookTarget).toBeNull()
+      pointer('pointermove', 600, 300)
+      expect(signals().charState).toBe('watching')
+    })
+
+    it('puts the cup down before it starts on a task that arrives during a sip', () => {
+      const stage = mount()
+      pointer('pointermove', 200, 150)
+      stage.untilState('fidgeting')
+      stage.run(0.5)
+      const task = startTask()
+      stage.frame()
+      // The sip goes on, and the symbol above the head already shows the task.
+      expect(signals()).toMatchObject({ charState: 'fidgeting', badge: 'thinking' })
+      expect(stage.props().clip).toBe('sip')
+      update(task.id, { step: 'searching', message: STEP_MESSAGES.searching })
+      stage.frame()
+      expect(signals()).toMatchObject({ charState: 'fidgeting', badge: 'working', bubble: [STEP_MESSAGES.searching] })
+      const sipped = stage.untilState('working')
+      expect(sipped).toBeGreaterThan(1)
+      stage.frame()
+      expect(stage.props().clip).toBe('typing')
     })
 
     it('keeps going when the pointer leaves the page or the window loses focus', () => {

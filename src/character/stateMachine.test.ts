@@ -511,6 +511,70 @@ describe('queued work', () => {
   })
 })
 
+describe('a sip', () => {
+  const sipping: CharMachine = { ...initialMachine(0), state: 'fidgeting', fidget: 'sip' }
+  const OTHER_FIDGETS: readonly FidgetKind[] = ['stretch', 'lookAround', 'tap']
+
+  it('finishes a sip before looking at the pointer', () => {
+    const m = transition(sipping, { type: 'pointerMove' }, 500)
+    expect(m).toMatchObject({ state: 'fidgeting', fidget: 'sip', lastPointerAt: 500 })
+  })
+
+  it('puts the cup down before starting on a task', () => {
+    const queued = transition(sipping, { type: 'taskStarted' }, 500)
+    expect(queued).toMatchObject({ state: 'fidgeting', fidget: 'sip', queued: 'work' })
+    expect(transition(queued, { type: 'clipFinished' }, 900).state).toBe('working')
+    const done = transition(queued, { type: 'taskDone' }, 700)
+    expect(transition(done, { type: 'clipFinished' }, 900).state).toBe('standingUp')
+    const failed = transition(queued, { type: 'taskFailed' }, 700)
+    expect(transition(failed, { type: 'clipFinished' }, 900).state).toBe('error')
+    const cancelled = transition(queued, { type: 'taskCancelled' }, 700)
+    expect(transition(cancelled, { type: 'clipFinished' }, 900).state).toBe('resting')
+  })
+
+  it('rests after a sip that nothing came in the way of', () => {
+    const next = transition(sipping, { type: 'clipFinished' }, 3000)
+    expect(next).toMatchObject({ state: 'resting', fidget: null, queued: null, enteredAt: 3000 })
+  })
+
+  it('keeps the time the sip began when a task is queued behind it', () => {
+    const queued = transition(sipping, { type: 'taskStarted' }, 500)
+    expect(queued.enteredAt).toBe(sipping.enteredAt)
+    expect(transition(queued, { type: 'taskDone' }, 700).enteredAt).toBe(sipping.enteredAt)
+  })
+
+  it('carries nothing of the sip into the state that follows it', () => {
+    const queued = transition(sipping, { type: 'taskStarted' }, 500)
+    expect(transition(queued, { type: 'clipFinished' }, 900)).toMatchObject({ state: 'working', fidget: null, queued: null, enteredAt: 900 })
+  })
+
+  it('ignores a repeated taskStarted while a task is queued', () => {
+    const queued = transition(sipping, { type: 'taskStarted' }, 500)
+    expect(transition(queued, { type: 'taskStarted' }, 600)).toBe(queued)
+  })
+
+  it.each(['taskDone', 'taskFailed', 'taskCancelled'] as const)('ignores %s while no task is queued', (type) => {
+    expect(transition(sipping, { type }, 500)).toBe(sipping)
+  })
+
+  it.each(['taskDone', 'taskFailed'] as const)('ignores %s once the queued task has come to an end', (type) => {
+    const done = transition(transition(sipping, { type: 'taskStarted' }, 500), { type: 'taskDone' }, 600)
+    expect(transition(done, { type }, 700)).toBe(done)
+  })
+
+  it('looks at the pointer once the cup is down', () => {
+    const rested = transition(transition(sipping, { type: 'pointerMove' }, 500), { type: 'clipFinished' }, 3000)
+    expect(rested).toMatchObject({ state: 'resting', lastPointerAt: 500 })
+    expect(transition(rested, { type: 'pointerMove' }, 3100).state).toBe('watching')
+  })
+
+  it.each(OTHER_FIDGETS)('is the only fidget that is finished first: %s gives way to the pointer and to a task', (fidget) => {
+    const fidgeting = machineIn('fidgeting', { fidget })
+    expect(transition(fidgeting, { type: 'pointerMove' }, T0 + 400)).toMatchObject({ state: 'watching', fidget: null })
+    expect(transition(fidgeting, { type: 'taskStarted' }, T0 + 400)).toMatchObject({ state: 'working', fidget: null, queued: null })
+  })
+})
+
 describe('enteredAt', () => {
   it.each<[CharState, EventType, CharState]>([
     ['resting', 'pointerMove', 'watching'],

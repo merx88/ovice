@@ -1,9 +1,11 @@
 import { MeshReflectorMaterial } from '@react-three/drei'
-import { Suspense } from 'react'
-import { Color } from 'three'
+import { useFrame } from '@react-three/fiber'
+import { Suspense, useLayoutEffect, useRef } from 'react'
+import { Color, type Group } from 'three'
 import { Character } from '../character/Character'
 import { ClipReview } from '../character/ClipReview'
 import { parseClipReview } from '../character/clipReview'
+import { CUP_REST, heldCup } from '../character/heldCup'
 import { useCharacterDriver } from '../character/useCharacterDriver'
 import { tokens } from '../theme/tokens'
 import { SpeechBubble } from '../ui/SpeechBubble'
@@ -20,7 +22,6 @@ import {
   BOOKSHELF_POS,
   BOOKSHELF_YAW,
   CHAIR_POS,
-  CUP_POS,
   DESK_POS,
   DRAWER_POS,
   LAMP_POS,
@@ -96,6 +97,29 @@ function Room() {
   )
 }
 
+/**
+ * The coffee cup: in its place on the desk, or wherever the character's hand
+ * has taken it. It looks every frame, after the character has posed (which
+ * the character does ahead of this, see `POSE_PRIORITY`), so cup and hand
+ * never part.
+ */
+function DeskCup() {
+  const cup = useRef<Group>(null)
+  const place = () => {
+    if (!cup.current) return
+    cup.current.matrix.copy(heldCup.held ? heldCup.matrix : CUP_REST)
+    cup.current.matrixWorldNeedsUpdate = true
+  }
+  // In its place from the start, whenever the first frame comes.
+  useLayoutEffect(place, [])
+  useFrame(place)
+  return (
+    <group ref={cup} matrixAutoUpdate={false}>
+      <CoffeeCup />
+    </group>
+  )
+}
+
 /** The character, moved and animated by its driver. Suspends until its model has loaded. */
 function Resident() {
   return <Character {...useCharacterDriver()} />
@@ -122,7 +146,7 @@ export function OfficeScene() {
       <Sofa position={[...SOFA_POS]} rotation={[0, SOFA_YAW, 0]} />
       <SideTable position={[...SIDE_TABLE_POS]} />
       <Lamp position={[...LAMP_POS]} />
-      <CoffeeCup position={[...CUP_POS]} />
+      <DeskCup />
       <Laptop position={[...LAPTOP_POS]} />
       <Suspense fallback={null}>{clipReview ? <ClipReview request={clipReview} /> : <Resident />}</Suspense>
       <SpeechBubble />

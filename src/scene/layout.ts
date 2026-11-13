@@ -100,7 +100,8 @@ export const SOFA_POS = [2.04, 0, -0.55] as const
 export const SOFA_YAW = -0.2
 export const SIDE_TABLE_POS = [2.2, 0, 0.3] as const
 export const LAMP_POS = [-0.74, DESK_TOP_Y, -0.08] as const
-export const CUP_POS = [0.62, DESK_TOP_Y, -0.05] as const
+/** Where the cup stands: as near the seat as it could go, because the character has to lean over to reach it. */
+export const CUP_POS = [0.55, DESK_TOP_Y, -0.17] as const
 
 // --- Cameras ----------------------------------------------------------------
 

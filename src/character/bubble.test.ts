@@ -46,7 +46,6 @@ describe('badgeForState', () => {
     ['resting', 'idle'],
     ['watching', 'idle'],
     ['greeting', 'idle'],
-    ['fidgeting', 'idle'],
     ['standingUp', 'done'],
     ['walkingOut', 'done'],
     ['handingFile', 'done'],
@@ -82,6 +81,20 @@ describe('badgeForState', () => {
     }
   })
 
+  it('shows a fidget as idle', () => {
+    for (const step of STEPS) expect(badgeForState('fidgeting', null, step)).toBe('idle')
+  })
+
+  it('shows what a task queued behind a sip has come to, as on the way back', () => {
+    for (const queued of QUEUED) {
+      for (const step of STEPS) expect(badgeForState('fidgeting', queued, step)).toBe(badgeForState('returning', queued, step))
+    }
+    expect(badgeForState('fidgeting', 'work', 'searching')).toBe('working')
+    expect(badgeForState('fidgeting', 'work', 'reading')).toBe('thinking')
+    expect(badgeForState('fidgeting', 'done', null)).toBe('done')
+    expect(badgeForState('fidgeting', 'failed', null)).toBe('error')
+  })
+
   it('always shows something: nothing hides the symbol yet', () => {
     for (const state of STATES) {
       for (const queued of QUEUED) for (const step of STEPS) expect(badgeForState(state, queued, step)).not.toBe('hidden')
@@ -108,6 +121,21 @@ describe('bubbleFor', () => {
     const message = STEP_MESSAGES.searching
     expect(bubbleFor(context({ state: 'returning', queued: 'work', message }))).toEqual([message])
     expect(bubbleFor(context({ state: 'returning', queued: 'work', message: null }))).toEqual([])
+  })
+
+  it('reports the progress of a task queued behind a sip, as on the way back', () => {
+    const message = STEP_MESSAGES.searching
+    expect(bubbleFor(context({ state: 'fidgeting', queued: 'work', message }))).toEqual([message])
+    expect(bubbleFor(context({ state: 'fidgeting', queued: 'work', message: null }))).toEqual([])
+    expect(bubbleFor(context({ state: 'fidgeting', queued: 'work', message, sinceCancel: 500 }))).toEqual([message])
+  })
+
+  it.each<Queued>([null, 'done', 'failed'])('says nothing during a sip with %s queued', (queued) => {
+    expect(bubbleFor(context({ state: 'fidgeting', queued, message: STEP_MESSAGES.writing }))).toEqual([])
+  })
+
+  it('says it is stopping when the task cancelled was the one queued behind a sip', () => {
+    expect(bubbleFor(context({ state: 'fidgeting', queued: null, sinceCancel: 500 }))).toEqual([MESSAGES.cancel])
   })
 
   it.each<Queued>([null, 'done', 'failed'])('says nothing on the way back with %s queued', (queued) => {

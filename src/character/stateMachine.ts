@@ -31,8 +31,9 @@ export interface CharMachine {
   /** Which fidget is playing; set only while `state` is 'fidgeting'. */
   fidget: FidgetKind | null
   /**
-   * What the task submitted during the hand-over has come to. Only ever set while
-   * 'returning': the character first walks back and sits down, then acts on it.
+   * What a task has come to that was submitted while the character could not
+   * start on it. Only ever set while 'returning' and during a sip: the
+   * character first sits down, or puts the cup back, and then acts on it.
    */
   queued: 'work' | 'done' | 'failed' | null
   /** Time of the last real pointer movement, recorded in every state. */
@@ -71,14 +72,36 @@ function enterFidgeting(m: CharMachine, now: number, rand: () => number): CharMa
   return enter(m, 'fidgeting', now, { fidget })
 }
 
+/** A sip is finished before anything else: the cup is in the hand and has to go back first. */
+function isSipping(m: CharMachine): boolean {
+  return m.state === 'fidgeting' && m.fidget === 'sip'
+}
+
 /** The pointer moved: note when, and look at it if the character is free to. */
 function onPointerMove(m: CharMachine, now: number): CharMachine {
   const moved = m.lastPointerAt === now ? m : { ...m, lastPointerAt: now }
-  return m.state === 'resting' || m.state === 'fidgeting' ? enter(moved, 'watching', now) : moved
+  const free = m.state === 'resting' || (m.state === 'fidgeting' && !isSipping(m))
+  return free ? enter(moved, 'watching', now) : moved
 }
 
-/** Sitting back down is over: act on whatever happened to the queued task meanwhile. */
-function finishReturning(m: CharMachine, now: number): CharMachine {
+/** Something happened to a task while the character cannot act on it: note what the task has come to. */
+function queueTask(m: CharMachine, e: CharEvent): CharMachine {
+  switch (e.type) {
+    case 'taskStarted':
+      return m.queued === 'work' ? m : { ...m, queued: 'work' }
+    case 'taskDone':
+      return m.queued === 'work' ? { ...m, queued: 'done' } : m
+    case 'taskFailed':
+      return m.queued === 'work' ? { ...m, queued: 'failed' } : m
+    case 'taskCancelled':
+      return m.queued === 'work' ? { ...m, queued: null } : m
+    default:
+      return m
+  }
+}
+
+/** Seated again, or the cup is back on the desk: act on whatever the queued task has come to meanwhile. */
+function actOnQueued(m: CharMachine, now: number): CharMachine {
   switch (m.queued) {
     case 'work':
       return enter(m, 'working', now)
@@ -135,6 +158,8 @@ export function transition(
       }
 
     case 'fidgeting':
+      // A task that arrives during a sip waits until the cup is back on the desk.
+      if (isSipping(m)) return e.type === 'clipFinished' ? actOnQueued(m, now) : queueTask(m, e)
       switch (e.type) {
         case 'taskStarted':
           return enter(m, 'working', now)
@@ -187,20 +212,7 @@ export function transition(
       }
 
     case 'returning':
-      switch (e.type) {
-        case 'taskStarted':
-          return m.queued === 'work' ? m : { ...m, queued: 'work' }
-        case 'taskDone':
-          return m.queued === 'work' ? { ...m, queued: 'done' } : m
-        case 'taskFailed':
-          return m.queued === 'work' ? { ...m, queued: 'failed' } : m
-        case 'taskCancelled':
-          return m.queued === 'work' ? { ...m, queued: null } : m
-        case 'clipFinished':
-          return finishReturning(m, now)
-        default:
-          return m
-      }
+      return e.type === 'clipFinished' ? actOnQueued(m, now) : queueTask(m, e)
 
     case 'error':
       switch (e.type) {

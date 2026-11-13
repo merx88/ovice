@@ -16,7 +16,9 @@ import {
 import type { Vec3 } from '../scene/layout'
 import { tokens } from '../theme/tokens'
 import { CLIPS, resolveClip, type ClipName } from './clips'
+import { SIP_GRIP } from './clips/sip'
 import { Folder } from './Folder'
+import { carryCup } from './heldCup'
 import { computeLookPitch, computeLookYaw, damp, lookAngles } from './lookAt'
 import { advancePlayback, createPlayback, MAX_STEP } from './playback'
 import { applyPose, applyRest, createRig, MODEL_URL, setEyeOpenness, turnBone, type Rig } from './rig'
@@ -56,6 +58,12 @@ export interface CharacterProps {
   onFolderClick(): void
 }
 
+/**
+ * The character poses after whoever drives it (frame priority -1) and before
+ * everything that goes by where its body is in the same frame, such as the
+ * cup in its hand (priority 0). Not above 0: that would take over rendering.
+ */
+export const POSE_PRIORITY = -0.5
 /** How quickly head and body turn towards the look target (1/s). */
 const LOOK_RATE = 8
 /** The eyes close for this long (s), at random intervals within this range (s). */
@@ -167,6 +175,9 @@ export function Character(props: CharacterProps) {
     [rig],
   )
 
+  // Whatever happens to the character, the cup does not stay in a hand that is gone.
+  useEffect(() => () => carryCup(false, rig.byName['arm_L.003'].bone.matrixWorld), [rig])
+
   useEffect(() => {
     // A clip that came with the model reports its own end.
     const onFinished = (event: { action: AnimationAction }) => {
@@ -262,6 +273,14 @@ export function Character(props: CharacterProps) {
     blink.elapsed += step
     setEyeOpenness(rig, 1 - (1 - BLINK.closed) * closing)
 
+    // --- The cup in the hand ------------------------------------------------
+    // Only the clip written here says when the hand has the cup; a sip that came with the model leaves it standing.
+    const { time } = state.playback
+    const holdsCup = clip === 'sip' && resolved.kind === 'procedural' && time >= SIP_GRIP.from && time < SIP_GRIP.to
+    const cupHand = rig.byName['arm_L.003'].bone
+    if (holdsCup) cupHand.updateWorldMatrix(true, false)
+    carryCup(holdsCup, cupHand.matrixWorld)
+
     // --- The things that follow the body ------------------------------------
     rig.byName.head.bone.getWorldPosition(state.head)
     badgeAnchor.current?.position.copy(state.head).setY(state.head.y + BADGE_ABOVE_HEAD)
@@ -277,7 +296,7 @@ export function Character(props: CharacterProps) {
     }
 
     if (justFinished) onClipFinished(clip)
-  })
+  }, POSE_PRIORITY)
 
   return (
     <>

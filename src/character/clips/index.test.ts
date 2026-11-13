@@ -2,6 +2,7 @@ import { AnimationClip, Euler, Quaternion, Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import { BONE_NAMES, CLIP_NAMES, CLIPS, resolveClip, type ClipName, type Pose } from './index'
 import { HANDOFF_POS, SEAT_GROUND_POS } from '../../scene/layout'
+import { MAX_STEP } from '../playback'
 import {
   ARM_ON_KEYS,
   ARM_OVER_KEYS,
@@ -15,6 +16,7 @@ import {
   type ArmPose,
   type Triple,
 } from './shared'
+import { SIP_GRIP } from './sip'
 import { WALK_SPEED } from './walk'
 
 const ALL_CLIPS: ClipName[] = [
@@ -313,6 +315,102 @@ describe('wave', () => {
       expect(armOff(pose, ['arm_L.001'], onKeys)).toBeLessThan(BREATH)
       expect(turnBetween(pose.body?.rot, seatedBase.body?.rot)).toBeLessThan(BREATH)
     }
+  })
+})
+
+/** The furthest any joint turns (radians) or moves (m) between two poses. */
+function poseChange(a: Pose, b: Pose): number {
+  let most = 0
+  for (const bone of new Set([...Object.keys(a), ...Object.keys(b)])) {
+    most = Math.max(most, turnBetween(a[bone]?.rot, b[bone]?.rot))
+    const from = a[bone]?.pos ?? [0, 0, 0]
+    const to = b[bone]?.pos ?? [0, 0, 0]
+    most = Math.max(most, Math.hypot(to[0] - from[0], to[1] - from[1], to[2] - from[2]))
+  }
+  return most
+}
+
+/**
+ * Plays `clip` in steps of a six-hundredth of a second and expects no joint
+ * to turn or move further in one step than a joint moving at `speed`
+ * (radians or metres a second) would: fast is allowed, a jump is not.
+ */
+function expectContinuous(name: ClipName, speed = 18, seconds = CLIPS[name].duration ?? 4) {
+  const clip = CLIPS[name]
+  const step = 1 / 600
+  let previous = clip.sample(0)
+  let furthest = { change: 0, at: 0 }
+  for (let t = step; t <= seconds + step; t += step) {
+    const pose = clip.sample(t)
+    const change = poseChange(previous, pose)
+    if (change > furthest.change) furthest = { change, at: t }
+    previous = pose
+  }
+  expect(furthest.change, `${name} at ${furthest.at.toFixed(3)} s`).toBeLessThan(speed * step)
+}
+
+describe('sip', () => {
+  const duration = CLIPS.sip.duration as number
+
+  it('has the cup in the hand for a stretch inside the clip, with time to reach it and to come back', () => {
+    expect(SIP_GRIP.from).toBeGreaterThan(0.4)
+    expect(SIP_GRIP.to).toBeGreaterThan(SIP_GRIP.from + 1.5)
+    expect(SIP_GRIP.to).toBeLessThan(duration - 0.4)
+  })
+
+  it('starts and ends exactly as the character sits', () => {
+    expectSamePose(CLIPS.sip.sample(0), seatedBase)
+    expectSamePose(CLIPS.sip.sample(duration), seatedBase)
+    expectSamePose(CLIPS.sip.sample(duration + 1), seatedBase)
+  })
+
+  it('moves without a jump from its first moment to its last', () => {
+    expectContinuous('sip')
+  })
+
+  it('holds perfectly still around the moments the hand takes the cup and lets go of it', () => {
+    // However the frames fall (none is longer than MAX_STEP), the cup is taken from a hand at rest
+    // and set down by a hand in that very pose, so it stands again exactly where it stood.
+    const taking = CLIPS.sip.sample(SIP_GRIP.from)
+    for (const at of [SIP_GRIP.from, SIP_GRIP.to]) {
+      for (const offset of [-MAX_STEP, -MAX_STEP / 2, 0, MAX_STEP / 2, MAX_STEP]) {
+        expect(poseChange(CLIPS.sip.sample(at + offset), taking), `at ${at} ${offset >= 0 ? '+' : '-'} ${Math.abs(offset)} s`).toBeLessThan(STILL)
+      }
+    }
+  })
+
+  it('leans over to the cup with the left hand, and brings it up while the body sits up again', () => {
+    const atCup = CLIPS.sip.sample(SIP_GRIP.from)
+    const atMouth = CLIPS.sip.sample((SIP_GRIP.from + SIP_GRIP.to) / 2)
+    // Leaning further forward and to its left than it sits.
+    expect(atCup.body?.rot?.[0] ?? 0).toBeGreaterThan(seatedBase.body?.rot?.[0] ?? 0)
+    expect(atCup.body?.rot?.[2] ?? 0).toBeLessThan(-0.1)
+    expect(atMouth.body?.rot?.[2] ?? 0).toBeCloseTo(0, 5)
+    // The hand holds the cup upright by its side: thumb up, on the desk as at the mouth before it tips.
+    expect(handAxes(atCup, 'L').thumb.y).toBeGreaterThan(0.98)
+    expect(armOff(atCup, LEFT_ARM, onKeys)).toBeGreaterThan(0.5)
+  })
+
+  it('tips the cup towards the face, a third of a right angle or more, and tips the head back with it', () => {
+    let tipped = 0
+    let headBack = 0
+    for (let t = SIP_GRIP.from; t <= SIP_GRIP.to; t += 0.05) {
+      const pose = CLIPS.sip.sample(t)
+      // The cup stands along the thumb; tipping it towards the face leans the thumb back (-z).
+      const { thumb } = handAxes(pose, 'L')
+      if (thumb.z < 0) tipped = Math.max(tipped, Math.acos(Math.min(1, thumb.y)))
+      const head = new Vector3(0, 0, 1).applyQuaternion(
+        new Quaternion()
+          .setFromEuler(new Euler(...(pose.body?.rot ?? [0, 0, 0])))
+          .multiply(new Quaternion().setFromEuler(new Euler(...(pose.head?.rot ?? [0, 0, 0])))),
+      )
+      headBack = Math.max(headBack, head.y)
+    }
+    expect(tipped).toBeGreaterThan((30 * Math.PI) / 180)
+    expect(tipped).toBeLessThan((45 * Math.PI) / 180)
+    // The face looks a little upwards at the most tipped moment.
+    expect(headBack).toBeGreaterThan(0.05)
+    expect(headBack).toBeLessThan(0.3)
   })
 })
 

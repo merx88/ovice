@@ -51,13 +51,13 @@ export function bubbleFor({ state, queued, message, sinceCancel, sinceDone }: Bu
     case 'error':
       return [MESSAGES.error]
     case 'returning':
-      // The next task is already running: its progress is the news.
+    case 'fidgeting':
+      // The next task is already running, on the way back to the desk or behind a sip: its progress is the news.
       if (queued === 'work') return message === null ? [] : [message]
       break
     case 'resting':
     case 'watching':
     case 'greeting':
-    case 'fidgeting':
       break
   }
   return sinceCancel !== null && sinceCancel < CANCEL_BUBBLE_MS ? [MESSAGES.cancel] : []
@@ -71,14 +71,14 @@ function workBadge(step: AgentStep | null): BadgeStatus {
 /**
  * The status symbol above the head. `step` is what the running task is doing,
  * which only matters while the character works on it or has it queued: on the
- * way back to the desk the symbol already shows what awaits there.
+ * way back to the desk, and while it finishes a sip, the symbol already shows
+ * what awaits.
  */
 export function badgeForState(state: CharState, queued: Queued, step: AgentStep | null): BadgeStatus {
   switch (state) {
     case 'resting':
     case 'watching':
     case 'greeting':
-    case 'fidgeting':
       return 'idle'
     case 'working':
       return workBadge(step)
@@ -89,6 +89,8 @@ export function badgeForState(state: CharState, queued: Queued, step: AgentStep 
     case 'error':
       return 'error'
     case 'returning':
+    case 'fidgeting':
+      // A fidget only has a task queued behind it when it is a sip.
       switch (queued) {
         case null:
           return 'idle'

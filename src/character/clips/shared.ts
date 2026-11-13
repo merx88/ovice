@@ -209,13 +209,6 @@ export const SEAT_LIFT = SEAT_HEIGHT - HEM_HEIGHT
 export const ARM_DOWN: ArmPose = { upper: [-0.22, -0.05, -0.83], fore: [0.17, 0.1, -0.45], hand: [-0.05, 0.02, 0.03] }
 
 /**
- * A hand resting on the desk beside the laptop, as the body sat before its
- * hands went onto the keys. Only the clips that still sit up for their gesture
- * use it.
- */
-export const ARM_ON_DESK: ArmPose = { upper: [0.91, -0.76, 0.27], fore: [-0.11, -0.68, 0.06], hand: [-0.06, -0.02, 0.15] }
-
-/**
  * A hand resting on the laptop: the fingertips on the keys, the cuff on the
  * laptop's near edge, and all of it inside the outline of the lid as the
  * camera sees it, wherever the pointer has taken the camera.
