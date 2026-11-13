@@ -13,6 +13,14 @@ const WORK_CLIPS: Record<AgentStep, ClipName> = {
 }
 
 /**
+ * Whether the character thinks its way through `step` rather than types: the
+ * steps whose clip is `think`, and a task that has not reported a step yet.
+ */
+export function isThinkingStep(step: AgentStep | null): boolean {
+  return step === null || WORK_CLIPS[step] === 'think'
+}
+
+/**
  * The clip that shows `state`. `fidget` only matters while fidgeting and
  * `step` (what the running task is doing) only while working; a task that has
  * not reported a step yet is being thought about.

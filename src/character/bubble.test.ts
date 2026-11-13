@@ -9,9 +9,10 @@ import {
   CANCEL_BUBBLE_MS,
   type BubbleContext,
 } from './bubble'
+import type { AgentStep } from '../store/tasks'
 import { SEAT_LIFT } from './clips/shared'
 import type { CharMachine, CharState } from './stateMachine'
-import type { BadgeStatus } from './StatusBadge'
+import type { BadgeStatus } from './statusSymbols'
 
 type Queued = CharMachine['queued']
 
@@ -28,6 +29,7 @@ const STATES: readonly CharState[] = [
   'error',
 ]
 const QUEUED: readonly Queued[] = [null, 'work', 'done', 'failed']
+const STEPS: readonly (AgentStep | null)[] = [null, 'reading', 'searching', 'comparing', 'writing']
 const SEATED_IDLE: readonly CharState[] = ['resting', 'watching', 'greeting', 'fidgeting']
 
 function context(patch: Partial<BubbleContext> = {}): BubbleContext {
@@ -40,22 +42,45 @@ describe('badgeForState', () => {
     ['watching', 'idle'],
     ['greeting', 'idle'],
     ['fidgeting', 'idle'],
-    ['working', 'working'],
     ['standingUp', 'done'],
     ['walkingOut', 'done'],
     ['handingFile', 'done'],
     ['error', 'error'],
-  ])('shows %s as %s, whatever is queued', (state, badge) => {
-    for (const queued of QUEUED) expect(badgeForState(state, queued)).toBe(badge)
+  ])('shows %s as %s, whatever is queued and whatever step a task is at', (state, badge) => {
+    for (const queued of QUEUED) for (const step of STEPS) expect(badgeForState(state, queued, step)).toBe(badge)
   })
 
-  it.each<[Queued, BadgeStatus]>([
-    ['work', 'working'],
-    ['done', 'done'],
-    ['failed', 'error'],
-    [null, 'idle'],
-  ])('on the way back with %s queued shows %s', (queued, badge) => {
-    expect(badgeForState('returning', queued)).toBe(badge)
+  it.each([
+    ['reading', 'thinking'],
+    ['searching', 'working'],
+    ['comparing', 'thinking'],
+    ['writing', 'working'],
+    [null, 'thinking'],
+  ] as const)('working on %s shows %s', (step, badge) => {
+    expect(badgeForState('working', null, step)).toBe(badge)
+  })
+
+  it('shows what a queued task has come to on the way back', () => {
+    expect(badgeForState('returning', 'work', 'searching')).toBe('working')
+    expect(badgeForState('returning', 'work', 'reading')).toBe('thinking')
+    expect(badgeForState('returning', 'done', null)).toBe('done')
+    expect(badgeForState('returning', 'failed', null)).toBe('error')
+    expect(badgeForState('returning', null, null)).toBe('idle')
+  })
+
+  it('goes by the step only while a task is being worked on or is queued as work', () => {
+    // A finished task leaves its last step behind; it says nothing about what the character is doing now.
+    for (const step of STEPS) {
+      expect(badgeForState('returning', 'done', step)).toBe('done')
+      expect(badgeForState('returning', 'failed', step)).toBe('error')
+      expect(badgeForState('returning', null, step)).toBe('idle')
+    }
+  })
+
+  it('always shows something: nothing hides the symbol yet', () => {
+    for (const state of STATES) {
+      for (const queued of QUEUED) for (const step of STEPS) expect(badgeForState(state, queued, step)).not.toBe('hidden')
+    }
   })
 })
 

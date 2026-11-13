@@ -3,9 +3,11 @@
 // about the 3D scene.
 import { MESSAGES } from '../agent/messages'
 import { CHARACTER_HEIGHT, type Vec3 } from '../scene/layout'
+import type { AgentStep } from '../store/tasks'
+import { isThinkingStep } from './clipForState'
 import { SEAT_LIFT } from './clips/shared'
 import type { CharMachine, CharState } from './stateMachine'
-import type { BadgeStatus } from './StatusBadge'
+import type { BadgeStatus } from './statusSymbols'
 
 type Queued = CharMachine['queued']
 
@@ -50,14 +52,17 @@ export function bubbleFor({ state, queued, message, sinceCancel }: BubbleContext
   return sinceCancel !== null && sinceCancel < CANCEL_BUBBLE_MS ? [MESSAGES.cancel] : []
 }
 
-/** What a task queued during the hand-over has come to, as a badge. */
-const QUEUED_BADGES = { work: 'working', done: 'done', failed: 'error' } as const satisfies Record<
-  NonNullable<Queued>,
-  BadgeStatus
->
+/** What a task at `step` has the character do, as a status: thinking it over, or at work on it. */
+function workBadge(step: AgentStep | null): BadgeStatus {
+  return isThinkingStep(step) ? 'thinking' : 'working'
+}
 
-/** The status icon above the head. On the way back to the desk it already shows what awaits there. */
-export function badgeForState(state: CharState, queued: Queued): BadgeStatus {
+/**
+ * The status symbol above the head. `step` is what the running task is doing,
+ * which only matters while the character works on it or has it queued: on the
+ * way back to the desk the symbol already shows what awaits there.
+ */
+export function badgeForState(state: CharState, queued: Queued, step: AgentStep | null): BadgeStatus {
   switch (state) {
     case 'resting':
     case 'watching':
@@ -65,7 +70,7 @@ export function badgeForState(state: CharState, queued: Queued): BadgeStatus {
     case 'fidgeting':
       return 'idle'
     case 'working':
-      return 'working'
+      return workBadge(step)
     case 'standingUp':
     case 'walkingOut':
     case 'handingFile':
@@ -73,7 +78,16 @@ export function badgeForState(state: CharState, queued: Queued): BadgeStatus {
     case 'error':
       return 'error'
     case 'returning':
-      return queued === null ? 'idle' : QUEUED_BADGES[queued]
+      switch (queued) {
+        case null:
+          return 'idle'
+        case 'work':
+          return workBadge(step)
+        case 'done':
+          return 'done'
+        case 'failed':
+          return 'error'
+      }
   }
 }
 

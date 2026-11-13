@@ -318,15 +318,23 @@ describe('useCharacterDriver', () => {
     it('is worked on at the laptop, thinking and typing by turns, with its progress in the bubble', () => {
       const stage = mount()
       const task = startTask()
-      expect(signals()).toEqual({ bubble: [], badge: 'working', charState: 'working' })
-      expect(stage.props()).toMatchObject({ clip: 'think', badge: 'working', lookTarget: null })
+      // Until the task says what it is doing, it is being thought about.
+      expect(signals()).toEqual({ bubble: [], badge: 'thinking', charState: 'working' })
+      expect(stage.props()).toMatchObject({ clip: 'think', badge: 'thinking', lookTarget: null })
 
-      const expected = { reading: 'think', searching: 'typing', comparing: 'think', writing: 'typing' } as const
+      const expected = {
+        reading: { clip: 'think', badge: 'thinking' },
+        searching: { clip: 'typing', badge: 'working' },
+        comparing: { clip: 'think', badge: 'thinking' },
+        writing: { clip: 'typing', badge: 'working' },
+      } as const
       for (const step of ['reading', 'searching', 'comparing', 'writing'] as const) {
         update(task.id, { step, message: STEP_MESSAGES[step] })
+        // The symbol above the head changes with the step, at once.
+        expect(signals()).toEqual({ bubble: [STEP_MESSAGES[step]], badge: expected[step].badge, charState: 'working' })
         stage.run(0.5)
-        expect(stage.props().clip).toBe(expected[step])
-        expect(signals()).toEqual({ bubble: [STEP_MESSAGES[step]], badge: 'working', charState: 'working' })
+        expect(stage.props()).toMatchObject(expected[step])
+        expect(signals()).toEqual({ bubble: [STEP_MESSAGES[step]], badge: expected[step].badge, charState: 'working' })
       }
     })
 
@@ -695,11 +703,18 @@ describe('useCharacterDriver', () => {
     it('sends the character back to work on it', () => {
       const { stage } = handingOver()
       const second = startTask('second')
-      expect(signals()).toEqual({ bubble: [], badge: 'working', charState: 'returning' })
+      expect(signals()).toEqual({ bubble: [], badge: 'thinking', charState: 'returning' })
       update(second.id, { step: 'reading', message: STEP_MESSAGES.reading })
       expect(signals().bubble).toEqual([STEP_MESSAGES.reading])
       stage.frame()
-      expect(stage.props()).toMatchObject({ clip: 'walk', holdingFile: false, badge: 'working' })
+      expect(stage.props()).toMatchObject({ clip: 'walk', holdingFile: false, badge: 'thinking' })
+
+      // On the way the symbol already follows what the task is doing.
+      update(second.id, { step: 'searching', message: STEP_MESSAGES.searching })
+      expect(signals()).toEqual({ bubble: [STEP_MESSAGES.searching], badge: 'working', charState: 'returning' })
+      stage.frame()
+      expect(stage.props()).toMatchObject({ clip: 'walk', badge: 'working' })
+      update(second.id, { step: 'reading', message: STEP_MESSAGES.reading })
 
       stage.untilState('working')
       expect(stage.props().placement).toEqual({ position: [...SEAT_GROUND_POS], facing: SEAT_FACING })

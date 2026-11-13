@@ -13,8 +13,14 @@ export const tokens = {
   pink: '#F7D9D7',
   white: '#FFFFFF',
   danger: '#E5393B',
-  // The status badge while the agent is working.
-  badgeYellow: '#D8C168',
+  // The status symbols above the character's head, sampled from the front faces of the owner's five pictures:
+  // an exclamation mark (something went wrong), three Z's (resting), and a ring that is orange when a task is
+  // finished, yellow while the character thinks and green while it is at work.
+  badgeRed: '#E93A3C',
+  badgeGrey: '#7A7A7A',
+  badgeOrange: '#D98C32',
+  badgeYellow: '#E0CD74',
+  badgeGreen: '#CDDC61',
   // Small props in the office scene (books, plants, laptop).
   plantGreen: '#5F8A2B',
   bookOlive: '#A5AD82',

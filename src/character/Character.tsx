@@ -20,7 +20,8 @@ import { Folder } from './Folder'
 import { computeLookPitch, computeLookYaw, damp, lookAngles } from './lookAt'
 import { advancePlayback, createPlayback, MAX_STEP } from './playback'
 import { applyPose, applyRest, createRig, MODEL_URL, setEyeOpenness, turnBone, type Rig } from './rig'
-import { StatusBadge, type BadgeStatus } from './StatusBadge'
+import { StatusBadge } from './StatusBadge'
+import type { BadgeStatus } from './statusSymbols'
 
 /** Where the character is and which way it faces. */
 export interface CharacterPlacement {

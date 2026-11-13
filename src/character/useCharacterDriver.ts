@@ -29,7 +29,7 @@ import { damp, lookPlaneDistance } from './lookAt'
 import { measurePath, roundCorners, samplePath, stepWalker, turnBetween, type PathSample, type Walker } from './path'
 import { MAX_STEP } from './playback'
 import { initialMachine, transition, type CharEvent, type CharMachine } from './stateMachine'
-import type { BadgeStatus } from './StatusBadge'
+import type { BadgeStatus } from './statusSymbols'
 import { runningTask, taskEvents, taskEventsAtFirstSight, type TasksSnapshot } from './taskEvents'
 
 /** The way between the seat (at distance 0) and the hand-off spot (at its full length). */
@@ -91,9 +91,10 @@ function createDriver(now: number): Driver {
 }
 
 function viewOf({ machine, backAtSeat }: Driver, running: Task | undefined): View {
+  const step = running?.step ?? null
   return {
-    clip: clipToPlay(machine.state, machine.fidget, running?.step ?? null, backAtSeat),
-    badge: badgeForState(machine.state, machine.queued),
+    clip: clipToPlay(machine.state, machine.fidget, step, backAtSeat),
+    badge: badgeForState(machine.state, machine.queued, step),
     holdingFile: machine.state === 'handingFile',
     looking: machine.state === 'watching' || machine.state === 'greeting',
   }

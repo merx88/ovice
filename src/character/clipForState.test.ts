@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentStep } from '../store/tasks'
-import { clipAwaitedBy, clipForState, clipSpeedFor, clipToPlay, WALK_PACE } from './clipForState'
+import { clipAwaitedBy, clipForState, clipSpeedFor, clipToPlay, isThinkingStep, WALK_PACE } from './clipForState'
 import { CLIP_NAMES, CLIPS, type ClipName } from './clips'
 import { FIDGETS, initialMachine, transition, type CharMachine, type CharState, type FidgetKind } from './stateMachine'
 
@@ -58,6 +58,22 @@ describe('clipForState', () => {
   it('ignores a fidget left over in any other state', () => {
     expect(clipForState('resting', 'sip', null)).toBe('idle')
     expect(clipForState('working', 'tap', 'searching')).toBe('typing')
+  })
+})
+
+describe('isThinkingStep', () => {
+  it.each<[AgentStep | null, boolean]>([
+    [null, true],
+    ['reading', true],
+    ['searching', false],
+    ['comparing', true],
+    ['writing', false],
+  ])('for step %s is %s', (step, thinking) => {
+    expect(isThinkingStep(step)).toBe(thinking)
+  })
+
+  it('is true for exactly the steps the character thinks through at its laptop', () => {
+    for (const step of STEPS) expect(isThinkingStep(step)).toBe(clipForState('working', null, step) === 'think')
   })
 })
 

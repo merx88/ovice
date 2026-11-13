@@ -5,7 +5,7 @@ import { create } from 'zustand'
 import { bubbleAnchorAt } from '../character/bubble'
 import { SEAT_LIFT } from '../character/clips/shared'
 import type { CharState } from '../character/stateMachine'
-import type { BadgeStatus } from '../character/StatusBadge'
+import type { BadgeStatus } from '../character/statusSymbols'
 import { SEAT_GROUND_POS } from '../scene/layout'
 
 /**
