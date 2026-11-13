@@ -3,4 +3,7 @@ dist
 .superpowers
 *.tsbuildinfo
 *.local
+.env
+.env.*
+!.env.example
 .DS_Store
