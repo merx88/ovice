@@ -2,6 +2,8 @@ import { MeshReflectorMaterial } from '@react-three/drei'
 import { Suspense } from 'react'
 import { Color } from 'three'
 import { Character } from '../character/Character'
+import { ClipReview } from '../character/ClipReview'
+import { parseClipReview } from '../character/clipReview'
 import { useCharacterDriver } from '../character/useCharacterDriver'
 import { tokens } from '../theme/tokens'
 import { SpeechBubble } from '../ui/SpeechBubble'
@@ -99,6 +101,13 @@ function Resident() {
   return <Character {...useCharacterDriver()} />
 }
 
+/**
+ * A review aid, in development only: `?clip=<name>` plays chosen clips on a
+ * character that nothing drives (see `character/clipReview.ts`). Not part of
+ * the product.
+ */
+const clipReview = import.meta.env.DEV ? parseClipReview(window.location.search) : null
+
 /** The whole office: room, lights, camera, every piece of furniture and the character. */
 export function OfficeScene() {
   return (
@@ -115,9 +124,7 @@ export function OfficeScene() {
       <Lamp position={[...LAMP_POS]} />
       <CoffeeCup position={[...CUP_POS]} />
       <Laptop position={[...LAPTOP_POS]} />
-      <Suspense fallback={null}>
-        <Resident />
-      </Suspense>
+      <Suspense fallback={null}>{clipReview ? <ClipReview request={clipReview} /> : <Resident />}</Suspense>
       <SpeechBubble />
     </>
   )
