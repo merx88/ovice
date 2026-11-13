@@ -27,7 +27,7 @@ import {
   DONE_FIRST_LINE_MS,
 } from './bubble'
 import type { CharacterPlacement, CharacterProps } from './Character'
-import { clipAwaitedBy, clipSpeedFor, clipToPlay, WALK_PACE } from './clipForState'
+import { clipAwaitedBy, clipSpeedFor, clipToPlay, WALK_PACE, type TravelPhase } from './clipForState'
 import type { ClipName } from './clips'
 import { SEAT_LIFT } from './clips/shared'
 import { WALK_SPEED } from './clips/walk'
@@ -65,8 +65,8 @@ interface Driver {
   machine: CharMachine
   /** Where the character is on the route and which way it faces. */
   walker: Walker
-  /** On the way back: true once the character has reached its chair and sits down. */
-  backAtSeat: boolean
+  /** How far a way back to the chair has come: `settling` once the character has reached it and sits down. */
+  phase: TravelPhase
   /** The tasks as they were when the driver last looked; null until it has looked once. */
   seen: TasksSnapshot | null
   /** The task whose result is being handed over: what the folder opens. */
@@ -90,7 +90,7 @@ function createDriver(now: number): Driver {
   return {
     machine: initialMachine(now),
     walker: { distance: 0, facing: SEAT_FACING },
-    backAtSeat: false,
+    phase: 'moving',
     seen: null,
     handoverTaskId: null,
     cancelledAt: null,
@@ -103,10 +103,10 @@ function createDriver(now: number): Driver {
   }
 }
 
-function viewOf({ machine, backAtSeat }: Driver, running: Task | undefined): View {
+function viewOf({ machine, phase }: Driver, running: Task | undefined): View {
   const step = running?.step ?? null
   return {
-    clip: clipToPlay(machine.state, machine.fidget, step, backAtSeat),
+    clip: clipToPlay(machine.state, machine.fidget, step, machine.place, phase),
     badge: badgeForState(machine.state, machine.queued, step),
     holdingFile: machine.state === 'handingFile',
     looking: machine.state === 'watching' || machine.state === 'greeting',
@@ -122,8 +122,11 @@ function sameView(a: View, b: View): boolean {
   return a.clip === b.clip && a.badge === b.badge && a.holdingFile === b.holdingFile && a.looking === b.looking
 }
 
-/** One event for every frame's tick; the machine reads the time it is given, not the event's. */
-const tick: CharEvent & { type: 'tick' } = { type: 'tick', now: 0 }
+/**
+ * One event for every frame's tick; the machine reads the time it is given, not the event's.
+ * The sofa is not offered as a place to wait yet.
+ */
+const tick: CharEvent & { type: 'tick' } = { type: 'tick', now: 0, canLounge: false }
 const sample: PathSample = { position: [0, 0, 0], heading: 0 }
 const eye = new Vector3()
 const throughPointer = new Vector3()
@@ -204,7 +207,7 @@ export function useCharacterDriver(): CharacterProps {
       const after = transition(before, event, now)
       if (after === before) return false
       driver.machine = after
-      if (after.state !== before.state) driver.backAtSeat = false
+      if (after.state !== before.state) driver.phase = 'moving'
       if (isHandingOver(after.state) !== isHandingOver(before.state)) {
         // The first line of the hand-over is said from here on, or the hand-over is over.
         driver.announcedAt = isHandingOver(after.state) ? now : null
@@ -313,13 +316,13 @@ export function useCharacterDriver(): CharacterProps {
     } else if (
       arrived &&
       driver.machine.state === 'returning' &&
-      !driver.backAtSeat &&
+      driver.phase === 'moving' &&
       Math.abs(turnBetween(walker.facing, SEAT_FACING)) <= FACES_DESK_WITHIN &&
       // If the character sat down a moment ago and has not been shown anything else
       // since, it would not play sitting down again: wait for the render in between.
-      renderedClip.current !== clipAwaitedBy('returning', null)
+      renderedClip.current !== clipAwaitedBy('returning', null, 'desk')
     ) {
-      driver.backAtSeat = true
+      driver.phase = 'settling'
       sync(now)
     }
 
@@ -330,7 +333,7 @@ export function useCharacterDriver(): CharacterProps {
     }
 
     // Where its bubble goes.
-    driver.lift = damp(driver.lift, bubbleLift(state, driver.backAtSeat), ANCHOR_RATE, step)
+    driver.lift = damp(driver.lift, bubbleLift(state, driver.machine.place, driver.phase), ANCHOR_RATE, step)
     bubbleAnchorAt(placement.position, driver.lift, useCharacterSignals.getState().bubbleAnchor.current)
   }, -1)
 
@@ -338,8 +341,8 @@ export function useCharacterDriver(): CharacterProps {
     (clip: ClipName) => {
       // The end of a clip only counts for the state that is waiting for it; any
       // other belongs to a state the machine has already left.
-      const { state, fidget } = driver.machine
-      if (clip !== clipAwaitedBy(state, fidget)) return
+      const { state, fidget, place } = driver.machine
+      if (clip !== clipAwaitedBy(state, fidget, place)) return
       dispatch({ type: 'clipFinished' }, performance.now())
     },
     [driver, dispatch],

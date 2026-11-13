@@ -2,11 +2,11 @@
 // its speech bubble goes. Rules only: nothing here knows about time passing or
 // about the 3D scene.
 import { MESSAGES } from '../agent/messages'
-import { CHARACTER_HEIGHT, type Vec3 } from '../scene/layout'
+import { CHARACTER_HEIGHT, SOFA_LIFT, type Vec3 } from '../scene/layout'
 import type { AgentStep } from '../store/tasks'
-import { isThinkingStep } from './clipForState'
+import { isThinkingStep, type TravelPhase } from './clipForState'
 import { SEAT_LIFT } from './clips/shared'
-import type { CharMachine, CharState } from './stateMachine'
+import type { CharMachine, CharState, Place } from './stateMachine'
 import type { BadgeStatus } from './statusSymbols'
 
 type Queued = CharMachine['queued']
@@ -51,6 +51,7 @@ export function bubbleFor({ state, queued, message, sinceCancel, sinceDone }: Bu
     case 'error':
       return [MESSAGES.error]
     case 'returning':
+    case 'rushingToDesk':
     case 'fidgeting':
       // The next task is already running, on the way back to the desk or behind a sip: its progress is the news.
       if (queued === 'work') return message === null ? [] : [message]
@@ -58,6 +59,7 @@ export function bubbleFor({ state, queued, message, sinceCancel, sinceDone }: Bu
     case 'resting':
     case 'watching':
     case 'greeting':
+    case 'goingToSofa':
       break
   }
   return sinceCancel !== null && sinceCancel < CANCEL_BUBBLE_MS ? [MESSAGES.cancel] : []
@@ -68,17 +70,33 @@ function workBadge(step: AgentStep | null): BadgeStatus {
   return isThinkingStep(step) ? 'thinking' : 'working'
 }
 
+/** What a task that waits for the character to be free has come to, as a status; `otherwise` when none waits. */
+function queuedBadge(queued: Queued, step: AgentStep | null, otherwise: BadgeStatus): BadgeStatus {
+  switch (queued) {
+    case null:
+      return otherwise
+    case 'work':
+      return workBadge(step)
+    case 'done':
+      return 'done'
+    case 'failed':
+      return 'error'
+  }
+}
+
 /**
  * The status symbol above the head. `step` is what the running task is doing,
- * which only matters while the character works on it or has it queued: on the
+ * which only matters while the character works on it or has it queued: on a
  * way back to the desk, and while it finishes a sip, the symbol already shows
- * what awaits.
+ * what awaits. It waits under its Z's, on the way to the sofa as well; while
+ * it runs back to the desk for nothing but the chat it shows no symbol.
  */
 export function badgeForState(state: CharState, queued: Queued, step: AgentStep | null): BadgeStatus {
   switch (state) {
     case 'resting':
     case 'watching':
     case 'greeting':
+    case 'goingToSofa':
       return 'idle'
     case 'working':
       return workBadge(step)
@@ -91,16 +109,9 @@ export function badgeForState(state: CharState, queued: Queued, step: AgentStep 
     case 'returning':
     case 'fidgeting':
       // A fidget only has a task queued behind it when it is a sip.
-      switch (queued) {
-        case null:
-          return 'idle'
-        case 'work':
-          return workBadge(step)
-        case 'done':
-          return 'done'
-        case 'failed':
-          return 'error'
-      }
+      return queuedBadge(queued, step, 'idle')
+    case 'rushingToDesk':
+      return queuedBadge(queued, step, 'hidden')
   }
 }
 
@@ -117,22 +128,29 @@ const BUBBLE_OFFSET = { right: 0.3, up: 0.08 } as const
 
 /**
  * How far (m) the character's body is above where it would be standing: the
- * height of the seat while it sits, none while it is on its feet. `sitting`
- * says whether a character on its way back has reached the chair and is
- * sitting down.
+ * height of the chair or of the sofa's cushion while it sits there, none
+ * while it is on its feet. `place` says where a waiting character sits and
+ * `phase` how far a travelling one has come: it is up on its seat again from
+ * the phase in which it sits down or hops on.
  */
-export function bubbleLift(state: CharState, sitting: boolean): number {
+export function bubbleLift(state: CharState, place: Place, phase: TravelPhase): number {
   switch (state) {
     case 'standingUp':
     case 'walkingOut':
     case 'handingFile':
       return 0
     case 'returning':
-      return sitting ? SEAT_LIFT : 0
+      return phase === 'settling' ? SEAT_LIFT : 0
+    case 'goingToSofa':
+      return phase === 'settling' || phase === 'landing' ? SOFA_LIFT : 0
+    case 'rushingToDesk':
+      if (phase === 'landing') return SOFA_LIFT
+      return phase === 'settling' ? SEAT_LIFT : 0
     case 'resting':
     case 'watching':
     case 'greeting':
     case 'fidgeting':
+      return place === 'sofa' ? SOFA_LIFT : SEAT_LIFT
     case 'working':
     case 'error':
       return SEAT_LIFT

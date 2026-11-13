@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { MESSAGES, STEP_MESSAGES } from '../agent/messages'
-import { CHARACTER_HEIGHT, HANDOFF_POS, SEAT_GROUND_POS } from '../scene/layout'
+import { CHARACTER_HEIGHT, HANDOFF_POS, SEAT_GROUND_POS, SOFA_LIFT, SOFA_SEAT_POS } from '../scene/layout'
 import {
   badgeForState,
   bubbleAnchorAt,
@@ -11,6 +11,7 @@ import {
   type BubbleContext,
 } from './bubble'
 import type { AgentStep } from '../store/tasks'
+import type { TravelPhase } from './clipForState'
 import { SEAT_LIFT } from './clips/shared'
 import type { CharMachine, CharState } from './stateMachine'
 import type { BadgeStatus } from './statusSymbols'
@@ -28,7 +29,10 @@ const STATES: readonly CharState[] = [
   'handingFile',
   'returning',
   'error',
+  'goingToSofa',
+  'rushingToDesk',
 ]
+const PHASES: readonly TravelPhase[] = ['landing', 'rising', 'moving', 'settling']
 const QUEUED: readonly Queued[] = [null, 'work', 'done', 'failed']
 const STEPS: readonly (AgentStep | null)[] = [null, 'reading', 'searching', 'comparing', 'writing']
 const SEATED_IDLE: readonly CharState[] = ['resting', 'watching', 'greeting', 'fidgeting']
@@ -95,9 +99,33 @@ describe('badgeForState', () => {
     expect(badgeForState('fidgeting', 'failed', null)).toBe('error')
   })
 
-  it('always shows something: nothing hides the symbol yet', () => {
+  it('keeps the Z\'s on the way to the sofa, as while it waits', () => {
+    for (const queued of QUEUED) for (const step of STEPS) expect(badgeForState('goingToSofa', queued, step)).toBe('idle')
+  })
+
+  it('shows nothing while it runs back to its desk for nothing but the chat', () => {
+    for (const step of STEPS) expect(badgeForState('rushingToDesk', null, step)).toBe('hidden')
+  })
+
+  it('shows what the task that called it back has come to while it runs, as on the way back from a hand-over', () => {
+    expect(badgeForState('rushingToDesk', 'work', 'searching')).toBe('working')
+    expect(badgeForState('rushingToDesk', 'work', 'reading')).toBe('thinking')
+    expect(badgeForState('rushingToDesk', 'work', null)).toBe('thinking')
+    expect(badgeForState('rushingToDesk', 'done', null)).toBe('done')
+    expect(badgeForState('rushingToDesk', 'failed', null)).toBe('error')
+    for (const queued of ['work', 'done', 'failed'] as const) {
+      for (const step of STEPS) expect(badgeForState('rushingToDesk', queued, step)).toBe(badgeForState('returning', queued, step))
+    }
+  })
+
+  it('hides the symbol at no other time', () => {
     for (const state of STATES) {
-      for (const queued of QUEUED) for (const step of STEPS) expect(badgeForState(state, queued, step)).not.toBe('hidden')
+      for (const queued of QUEUED) {
+        for (const step of STEPS) {
+          const hidden = badgeForState(state, queued, step) === 'hidden'
+          expect(hidden, `${state}, ${queued} queued`).toBe(state === 'rushingToDesk' && queued === null)
+        }
+      }
     }
   })
 })
@@ -141,6 +169,33 @@ describe('bubbleFor', () => {
   it.each<Queued>([null, 'done', 'failed'])('says nothing on the way back with %s queued', (queued) => {
     // A task's last progress line outlives the task; it must not be repeated here.
     expect(bubbleFor(context({ state: 'returning', queued, message: STEP_MESSAGES.writing }))).toEqual([])
+  })
+
+  it('says nothing on the way to the sofa, whatever a task has left behind', () => {
+    for (const queued of QUEUED) {
+      expect(bubbleFor(context({ state: 'goingToSofa', queued, message: STEP_MESSAGES.writing }))).toEqual([])
+    }
+  })
+
+  it('says nothing while it runs back for the chat alone', () => {
+    expect(bubbleFor(context({ state: 'rushingToDesk', message: STEP_MESSAGES.writing }))).toEqual([])
+  })
+
+  it('already reports the progress of the task that called it back while it runs', () => {
+    const message = STEP_MESSAGES.reading
+    expect(bubbleFor(context({ state: 'rushingToDesk', queued: 'work', message }))).toEqual([message])
+    expect(bubbleFor(context({ state: 'rushingToDesk', queued: 'work', message: null }))).toEqual([])
+    expect(bubbleFor(context({ state: 'rushingToDesk', queued: 'work', message, sinceCancel: 500 }))).toEqual([message])
+  })
+
+  it.each<Queued>(['done', 'failed'])('says nothing while it runs back with %s queued: that is said once it is seated', (queued) => {
+    expect(bubbleFor(context({ state: 'rushingToDesk', queued, message: STEP_MESSAGES.writing }))).toEqual([])
+  })
+
+  it.each<CharState>(['goingToSofa', 'rushingToDesk'])('still says it is stopping for its two seconds while %s', (state) => {
+    expect(bubbleFor(context({ state, sinceCancel: 0 }))).toEqual([MESSAGES.cancel])
+    expect(bubbleFor(context({ state, sinceCancel: 1999 }))).toEqual([MESSAGES.cancel])
+    expect(bubbleFor(context({ state, sinceCancel: 2000 }))).toEqual([])
   })
 
   it.each<CharState>(['standingUp', 'walkingOut'])('announces the result while %s, however long that takes', (state) => {
@@ -238,18 +293,37 @@ describe('bubbleFor', () => {
 
 describe('bubbleLift', () => {
   it.each<CharState>(['resting', 'watching', 'greeting', 'fidgeting', 'working', 'error'])(
-    'is the height of the seat while %s',
+    'is the height of the chair while %s at the desk',
     (state) => {
-      expect(bubbleLift(state, false)).toBe(SEAT_LIFT)
+      for (const phase of PHASES) expect(bubbleLift(state, 'desk', phase)).toBe(SEAT_LIFT)
     },
   )
 
-  it.each<CharState>(['standingUp', 'walkingOut', 'handingFile', 'returning'])('is zero while %s, on its feet', (state) => {
-    expect(bubbleLift(state, false)).toBe(0)
+  it.each<CharState>(['resting', 'watching', 'greeting', 'fidgeting'])('is the height of the cushion while %s on the sofa', (state) => {
+    for (const phase of PHASES) expect(bubbleLift(state, 'sofa', phase)).toBe(SOFA_LIFT)
+    expect(SOFA_LIFT).toBeGreaterThan(SEAT_LIFT)
   })
 
-  it('rises again once the character sits back down', () => {
-    expect(bubbleLift('returning', true)).toBe(SEAT_LIFT)
+  it.each<CharState>(['standingUp', 'walkingOut', 'handingFile'])('is zero while %s, on its feet', (state) => {
+    for (const phase of PHASES) expect(bubbleLift(state, 'desk', phase)).toBe(0)
+  })
+
+  it('is zero on the way back and rises again once the character sits back down', () => {
+    expect(bubbleLift('returning', 'desk', 'moving')).toBe(0)
+    expect(bubbleLift('returning', 'desk', 'settling')).toBe(SEAT_LIFT)
+  })
+
+  it('follows the character off its chair, across the floor and up onto the sofa', () => {
+    expect(bubbleLift('goingToSofa', 'desk', 'rising')).toBe(0)
+    expect(bubbleLift('goingToSofa', 'desk', 'moving')).toBe(0)
+    expect(bubbleLift('goingToSofa', 'desk', 'settling')).toBe(SOFA_LIFT)
+  })
+
+  it('follows it off the sofa, across the floor and up onto its chair', () => {
+    expect(bubbleLift('rushingToDesk', 'desk', 'landing')).toBe(SOFA_LIFT)
+    expect(bubbleLift('rushingToDesk', 'desk', 'rising')).toBe(0)
+    expect(bubbleLift('rushingToDesk', 'desk', 'moving')).toBe(0)
+    expect(bubbleLift('rushingToDesk', 'desk', 'settling')).toBe(SEAT_LIFT)
   })
 })
 
@@ -269,6 +343,14 @@ describe('bubbleAnchorAt', () => {
     expect(seated[0] - standing[0]).toBeCloseTo(SEAT_GROUND_POS[0] - HANDOFF_POS[0])
     expect(seated[1] - standing[1]).toBeCloseTo(SEAT_LIFT)
     expect(seated[2] - standing[2]).toBeCloseTo(SEAT_GROUND_POS[2] - HANDOFF_POS[2])
+  })
+
+  it('is as far above a character on the sofa as above one at the desk', () => {
+    const atDesk = bubbleAnchorAt(SEAT_GROUND_POS, SEAT_LIFT)
+    const onSofa = bubbleAnchorAt(SOFA_SEAT_POS, SOFA_LIFT)
+    expect(onSofa[0] - SOFA_SEAT_POS[0]).toBeCloseTo(atDesk[0] - SEAT_GROUND_POS[0])
+    expect(onSofa[1] - SOFA_LIFT).toBeCloseTo(atDesk[1] - SEAT_LIFT)
+    expect(onSofa[2]).toBe(SOFA_SEAT_POS[2])
   })
 
   it('writes into the tuple it is given', () => {

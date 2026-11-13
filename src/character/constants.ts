@@ -4,6 +4,9 @@ export const POINTER_STILL_MS = 1200
 /** Minimum time between the start of one greeting and the start of the next. */
 export const GREET_INTERVAL_MS = 8000
 
+/** The character goes to wait on the sofa once the chat has not been used for this long. */
+export const SOFA_AFTER_MS = 10_000
+
 /** The head turns at most 45° to either side; the body takes up the rest. */
 export const HEAD_MAX_YAW = Math.PI / 4
 
