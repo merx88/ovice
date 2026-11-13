@@ -23,6 +23,11 @@ describe('LibraryPanel', () => {
     expect(buttons[9]).toHaveTextContent('Search library')
   })
 
+  it('marks the English label of the search pill as English', () => {
+    render(<LibraryPanel />)
+    expect(screen.getByText('Search library')).toHaveAttribute('lang', 'en')
+  })
+
   it('names every tile, each differently, and hides the drawings from screen readers', () => {
     const { container } = render(<LibraryPanel />)
     const names = screen.getAllByRole('button').map((button) => {

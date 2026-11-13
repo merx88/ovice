@@ -152,7 +152,7 @@ export function LibraryPanel() {
         <span className="search__disc">
           <Icon name="sparkles" size={26} />
         </span>
-        Search library
+        <span lang="en">Search library</span>
       </button>
     </section>
   )

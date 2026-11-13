@@ -50,6 +50,16 @@ describe('TopBar', () => {
     expect(onOpenSettings).not.toHaveBeenCalled()
   })
 
+  it('marks the English labels as English on the Korean page', () => {
+    render(<TopBar onOpenSettings={() => {}} />)
+    for (const name of ['Office', 'Agents', 'Projects']) {
+      expect(screen.getByRole('button', { name }).closest('[lang]')).toHaveAttribute('lang', 'en')
+    }
+    expect(screen.getByText("Researcher's office")).toHaveAttribute('lang', 'en')
+    // The Korean names of the icon buttons are not marked as English.
+    expect(screen.getByRole('button', { name: '알림' }).closest('[lang]')).toBeNull()
+  })
+
   it('gives every button a name and hides every icon from screen readers', () => {
     const { container } = render(<TopBar onOpenSettings={() => {}} />)
     for (const button of screen.getAllByRole('button')) expect(button).toHaveAccessibleName()

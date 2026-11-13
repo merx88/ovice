@@ -25,7 +25,11 @@ function Logo() {
   )
 }
 
-/** The bar along the top: logo, the three tabs, and the office, notifications and settings buttons. */
+/**
+ * The bar along the top: logo, the three tabs, and the office, notifications
+ * and settings buttons. The labels the reference shows are English and are
+ * marked as such for screen readers; everything else on the page is Korean.
+ */
 export function TopBar({ onOpenSettings }: TopBarProps) {
   return (
     <header className="topbar">
@@ -33,11 +37,11 @@ export function TopBar({ onOpenSettings }: TopBarProps) {
       <nav className="tabs" aria-label="주요 메뉴">
         {TABS.map((tab) =>
           tab === CURRENT_TAB ? (
-            <button key={tab} type="button" className="tab" aria-current="page">
+            <button key={tab} type="button" className="tab" lang="en" aria-current="page">
               {tab}
             </button>
           ) : (
-            <button key={tab} type="button" className="tab" onClick={showComingSoon}>
+            <button key={tab} type="button" className="tab" lang="en" onClick={showComingSoon}>
               {tab}
             </button>
           ),
@@ -48,7 +52,9 @@ export function TopBar({ onOpenSettings }: TopBarProps) {
           <span className="office__pin">
             <Icon name="pin" size={31} />
           </span>
-          <span className="office__name">{OFFICE_NAME}</span>
+          <span className="office__name" lang="en">
+            {OFFICE_NAME}
+          </span>
           <span className="sr-only"> 오피스 선택</span>
           <span className="office__caret">
             <Icon name="caret" size={20} />
