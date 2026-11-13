@@ -1,6 +1,7 @@
 // What a change of the tasks store means to the character: which task it
 // should start working on, how the task it was working on ended, and when the
-// result viewer was closed.
+// result viewer was closed. And what the store means to a character that sees
+// it for the first time.
 import type { Task, TasksState } from '../store/tasks'
 
 /** The part of the tasks store the character reacts to. */
@@ -50,4 +51,46 @@ export function taskEvents(previous: TasksSnapshot, next: TasksSnapshot): TaskEv
   if (previous.viewingId !== null && next.viewingId === null) events.push({ type: 'viewerClosed' })
 
   return events
+}
+
+/**
+ * The result that is still waiting to be handed over in a store nobody has
+ * watched so far: that of the newest task, if the task finished with one
+ * during this page load and the viewer is not already showing it. Tasks are
+ * kept newest first, and `pageLoadedAt` is on the clock `createdAt` is read from.
+ */
+function waitingResult(found: TasksSnapshot, pageLoadedAt: number): Task | undefined {
+  const newest: Task | undefined = found.tasks[0]
+  if (newest?.status !== 'done' || newest.result === null) return undefined
+  // What an earlier page load produced has been handed over there, or never will be.
+  if (newest.createdAt < pageLoadedAt) return undefined
+  // A result somebody is reading has been delivered.
+  if (found.viewingId === newest.id) return undefined
+  return newest
+}
+
+/**
+ * The events for a character that looks at the tasks for the first time. That
+ * can be well after the page was loaded at `pageLoadedAt`: its model can take
+ * longer to arrive than a task takes to run.
+ *
+ * A task that is running is picked up, as `taskEvents` picks it up from
+ * `NO_TASKS`. Failing that, a result that is still waiting is reported as a
+ * task that started and is done, which is what the character would have been
+ * told had it been there all along; so it stands up and hands the result over.
+ * Everything else in the store is history and is not reported.
+ *
+ * This is for the first sight only. From then on `taskEvents` tells what
+ * changes, which is how a result is handed over once and not again.
+ */
+export function taskEventsAtFirstSight(found: TasksSnapshot, pageLoadedAt: number): TaskEvent[] {
+  const running = runningTask(found)
+  if (running) return [{ type: 'taskStarted', taskId: running.id }]
+
+  const waiting = waitingResult(found, pageLoadedAt)
+  if (!waiting) return []
+  return [
+    { type: 'taskStarted', taskId: waiting.id },
+    { type: 'taskDone', taskId: waiting.id },
+  ]
 }

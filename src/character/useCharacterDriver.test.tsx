@@ -1,4 +1,5 @@
 import { act, renderHook } from '@testing-library/react'
+import { StrictMode, type JSXElementConstructor, type ReactNode } from 'react'
 import { PerspectiveCamera } from 'three'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MESSAGES, STEP_MESSAGES } from '../agent/messages'
@@ -51,15 +52,19 @@ let clock = 0
 /**
  * Mounts the driver with a stand-in for the 3D character: it plays whatever
  * clip the driver asks for through the real playback bookkeeping and reports
- * the end of finite clips, as the character does.
+ * the end of finite clips, as the character does. `wrapper` goes round the
+ * component that calls the hook.
  */
-function mount() {
+function mount(wrapper?: JSXElementConstructor<{ children: ReactNode }>) {
   let renders = 0
   const playback = createPlayback()
-  const hook = renderHook(() => {
-    renders++
-    return useCharacterDriver()
-  })
+  const hook = renderHook(
+    () => {
+      renders++
+      return useCharacterDriver()
+    },
+    { wrapper },
+  )
   const props = () => hook.result.current
 
   /**
@@ -473,31 +478,135 @@ describe('useCharacterDriver', () => {
       }
     })
 
-    it('leaves alone whatever is in the store when the character appears', () => {
-      act(() => {
-        const old = useTasks.getState().create('An old task')
-        useTasks.getState().update(old.id, { status: 'done', result: RESULT, finishedAt: 1 })
-        const failed = useTasks.getState().create('Another old task')
-        useTasks.getState().update(failed.id, { status: 'failed', error: 'x', finishedAt: 1 })
-      })
-      const stage = mount()
-      stage.run(3)
-      expect(signals()).toEqual({ bubble: [], badge: 'idle', charState: 'resting' })
-      expect(stage.props()).toMatchObject({ clip: 'idle', holdingFile: false })
-
-      // Looking at an old result and closing it again is nothing to the character either.
-      act(() => useTasks.getState().setViewing(useTasks.getState().tasks[1].id))
-      act(() => useTasks.getState().setViewing(null))
-      stage.run(1)
-      expect(signals().charState).toBe('resting')
-    })
-
     it('is picked up when it is already running as the character appears', () => {
       const task = startTask()
       update(task.id, { step: 'searching', message: STEP_MESSAGES.searching })
       const stage = mount()
       expect(signals()).toEqual({ bubble: [STEP_MESSAGES.searching], badge: 'working', charState: 'working' })
       expect(stage.props().clip).toBe('typing')
+    })
+  })
+
+  describe('a result that was ready before the character appeared', () => {
+    /** When the page was loaded (ms since 1970): a minute before these tests run. */
+    const LOADED_AT = Date.now() - 60_000
+    const RESTING = { bubble: [], badge: 'idle', charState: 'resting' }
+
+    beforeEach(() => {
+      vi.spyOn(performance, 'timeOrigin', 'get').mockReturnValue(LOADED_AT)
+    })
+
+    /** A finished task as the store holds it, created `afterLoad` ms after the page was loaded: before it, if negative. */
+    function finished(id: string, afterLoad: number, patch: Partial<Task> = {}): Task {
+      return {
+        id,
+        prompt: `Prompt ${id}`,
+        status: 'done',
+        step: 'writing',
+        message: null,
+        result: RESULT,
+        error: null,
+        createdAt: LOADED_AT + afterLoad,
+        finishedAt: LOADED_AT + afterLoad + 700,
+        ...patch,
+      }
+    }
+
+    /** Fills the store with what the character finds in it once its model has loaded. */
+    function found(tasks: Task[], viewingId: string | null = null) {
+      act(() => useTasks.setState({ tasks, activeId: null, viewingId }))
+    }
+
+    it('is handed over as if the character had watched the task finish', () => {
+      found([finished('new', 5_000), finished('old', -5_000)])
+      const stage = mount()
+
+      // Standing up, in place...
+      expect(signals()).toEqual({ bubble: [MESSAGES.done[0]], badge: 'done', charState: 'standingUp' })
+      stage.frame()
+      expect(stage.props()).toMatchObject({ clip: 'standUp', holdingFile: false })
+      expect(stage.props().placement.position).toEqual([...SEAT_GROUND_POS])
+      const stoodUp = stage.untilState('walkingOut')
+      expect(stoodUp).toBeCloseTo(CLIPS.standUp.duration as number, 1)
+
+      // ...walking round the desk...
+      const walked = stage.untilState('handingFile')
+      expect(walked).toBeGreaterThan(3.2)
+      expect(walked).toBeLessThan(3.8)
+
+      // ...and holding out the folder, which opens that result.
+      expect(signals()).toEqual({ bubble: [...MESSAGES.done], badge: 'done', charState: 'handingFile' })
+      expect(stage.props()).toMatchObject({ clip: 'holdFile', holdingFile: true })
+      act(() => stage.props().onFolderClick())
+      expect(useTasks.getState().viewingId).toBe('new')
+
+      // Once it is read the character goes back to its seat and stays there.
+      act(() => useTasks.getState().setViewing(null))
+      stage.untilState('resting')
+      stage.run(5)
+      expect(signals()).toEqual(RESTING)
+      expect(stage.props()).toMatchObject({ clip: 'idle', holdingFile: false })
+    })
+
+    it('counts from the millisecond the page was loaded', () => {
+      found([finished('first', 0)])
+      mount()
+      expect(signals().charState).toBe('standingUp')
+    })
+
+    it('is left alone when an earlier page load produced it, as after a reload', () => {
+      found([
+        finished('held', -1),
+        finished('failed', -9_000, { status: 'failed', result: null, error: 'x' }),
+        finished('older', -20_000),
+      ])
+      const stage = mount()
+      stage.run(3)
+      expect(signals()).toEqual(RESTING)
+      expect(stage.props()).toMatchObject({ clip: 'idle', holdingFile: false })
+
+      // Looking at an old result and closing it again is nothing to the character either.
+      act(() => useTasks.getState().setViewing('held'))
+      act(() => useTasks.getState().setViewing(null))
+      stage.run(1)
+      expect(signals()).toEqual(RESTING)
+    })
+
+    it('is left alone when it is already open in the viewer', () => {
+      found([finished('new', 5_000)], 'new')
+      const stage = mount()
+      stage.run(3)
+      expect(signals()).toEqual(RESTING)
+
+      // Nor does closing the viewer bring the character out.
+      act(() => useTasks.getState().setViewing(null))
+      stage.run(3)
+      expect(signals()).toEqual(RESTING)
+      expect(stage.props()).toMatchObject({ clip: 'idle', holdingFile: false })
+    })
+
+    it.each(['cancelled', 'failed'] as const)('is left alone when a later task has ended as %s since', (status) => {
+      found([finished('later', 9_000, { status, result: null }), finished('new', 5_000)])
+      const stage = mount()
+      stage.run(3)
+      expect(signals()).toEqual(RESTING)
+    })
+
+    it('is handed over once, also where the driver is set up a second time', () => {
+      found([finished('new', 5_000)])
+      // Strict mode runs every effect, takes it down and runs it again.
+      const stage = mount(StrictMode)
+      expect(signals()).toEqual({ bubble: [MESSAGES.done[0]], badge: 'done', charState: 'standingUp' })
+
+      // Straight out, without sitting down in between.
+      stage.frame()
+      const states = new Set<string>()
+      const out = stage.until(() => {
+        states.add(signals().charState)
+        return signals().charState === 'handingFile'
+      })
+      expect([...states]).toEqual(['standingUp', 'walkingOut', 'handingFile'])
+      expect(out).toBeLessThan((CLIPS.standUp.duration as number) + 3.8)
     })
   })
 

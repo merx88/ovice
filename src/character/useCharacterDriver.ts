@@ -29,7 +29,7 @@ import { measurePath, roundCorners, samplePath, stepWalker, turnBetween, type Pa
 import { MAX_STEP } from './playback'
 import { initialMachine, transition, type CharEvent, type CharMachine } from './stateMachine'
 import type { BadgeStatus } from './StatusBadge'
-import { NO_TASKS, runningTask, taskEvents, type TasksSnapshot } from './taskEvents'
+import { runningTask, taskEvents, taskEventsAtFirstSight, type TasksSnapshot } from './taskEvents'
 
 /** The way between the seat (at distance 0) and the hand-off spot (at its full length). */
 const ROUTE = measurePath(roundCorners(WALK_OUT_PATH, WALK_CORNER_RADIUS))
@@ -59,6 +59,8 @@ interface Driver {
   walker: Walker
   /** On the way back: true once the character has reached its chair and sits down. */
   backAtSeat: boolean
+  /** The tasks as they were when the driver last looked; null until it has looked once. */
+  seen: TasksSnapshot | null
   /** The task whose result is being handed over: what the folder opens. */
   handoverTaskId: string | null
   /** When a task was last cancelled (ms), until the line about it has been said or another task starts. */
@@ -77,6 +79,7 @@ function createDriver(now: number): Driver {
     machine: initialMachine(now),
     walker: { distance: 0, facing: SEAT_FACING },
     backAtSeat: false,
+    seen: null,
     handoverTaskId: null,
     cancelledAt: null,
     pointer: { x: 0, y: 0 },
@@ -209,20 +212,24 @@ export function useCharacterDriver(): CharacterProps {
 
   // --- The tasks ---------------------------------------------------------------
   useEffect(() => {
-    let seen: TasksSnapshot = NO_TASKS
     const onTasks = (tasks: TasksSnapshot) => {
       const now = performance.now()
-      for (const event of taskEvents(seen, tasks)) {
+      // The first sight comes once in the driver's life, however often this effect is set up.
+      // `timeOrigin` is when the page was loaded, in the milliseconds since 1970 a task is stamped with.
+      const events =
+        driver.seen === null ? taskEventsAtFirstSight(tasks, performance.timeOrigin) : taskEvents(driver.seen, tasks)
+      for (const event of events) {
         if (event.type === 'taskStarted') driver.cancelledAt = null
         if (event.type === 'taskCancelled') driver.cancelledAt = now
         const taken = dispatch(event, now)
         if (taken && event.type === 'taskDone') driver.handoverTaskId = event.taskId
       }
-      seen = tasks
+      driver.seen = tasks
       // The running task's step or progress line may have changed without any event.
       sync(now)
     }
-    // Whatever is in the store by now is history, except a task that is running.
+    // Whatever is in the store by now is history, except a task that is running
+    // and a result that was ready before the character was there to hand it over.
     onTasks(useTasks.getState())
     const unsubscribe = useTasks.subscribe(onTasks)
     return () => {

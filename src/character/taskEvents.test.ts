@@ -1,7 +1,14 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createTasksStore, type Task, type TaskStatus } from '../store/tasks'
 import { initialMachine, transition, type CharEvent } from './stateMachine'
-import { NO_TASKS, runningTask, taskEvents, type TaskEvent, type TasksSnapshot } from './taskEvents'
+import {
+  NO_TASKS,
+  runningTask,
+  taskEvents,
+  taskEventsAtFirstSight,
+  type TaskEvent,
+  type TasksSnapshot,
+} from './taskEvents'
 
 function task(id: string, status: TaskStatus, patch: Partial<Task> = {}): Task {
   return {
@@ -202,5 +209,127 @@ describe('taskEvents', () => {
     const events: CharEvent[] = [...taskEvents(NO_TASKS, started), ...taskEvents(started, snapshot([task('a', 'done')]))]
     const machine = events.reduce((m, event) => transition(m, event, 0), initialMachine(0))
     expect(machine.state).toBe('standingUp')
+  })
+})
+
+describe('taskEventsAtFirstSight', () => {
+  /** When the page was loaded, on the clock `createdAt` is read from. */
+  const LOADED_AT = 50_000
+  /** Created during this page load, and during an earlier one. */
+  const fresh = { createdAt: LOADED_AT + 4_000 }
+  const stale = { createdAt: LOADED_AT - 4_000 }
+  const handOver = (taskId: string): TaskEvent[] => [
+    { type: 'taskStarted', taskId },
+    { type: 'taskDone', taskId },
+  ]
+
+  it('reports nothing for an empty store', () => {
+    expect(taskEventsAtFirstSight(NO_TASKS, LOADED_AT)).toEqual([])
+  })
+
+  describe('a result that is waiting', () => {
+    it('reports the newest task as started and done when it finished during this page load', () => {
+      const found = snapshot([task('b', 'done', fresh), task('a', 'done', stale)])
+      expect(taskEventsAtFirstSight(found, LOADED_AT)).toEqual(handOver('b'))
+    })
+
+    it('counts a task created in the very millisecond the page was loaded, and none from before', () => {
+      const at = (createdAt: number) => snapshot([task('a', 'done', { createdAt })])
+      expect(taskEventsAtFirstSight(at(LOADED_AT), LOADED_AT)).toEqual(handOver('a'))
+      expect(taskEventsAtFirstSight(at(LOADED_AT - 1), LOADED_AT)).toEqual([])
+    })
+
+    it('takes the events through the character machine to standing up', () => {
+      const events: CharEvent[] = taskEventsAtFirstSight(snapshot([task('a', 'done', fresh)]), LOADED_AT)
+      const machine = events.reduce((m, event) => transition(m, event, 0), initialMachine(0))
+      expect(machine.state).toBe('standingUp')
+    })
+
+    it('is still waiting while the viewer shows another result', () => {
+      const found = snapshot([task('b', 'done', fresh), task('a', 'done', stale)], null, 'a')
+      expect(taskEventsAtFirstSight(found, LOADED_AT)).toEqual(handOver('b'))
+    })
+  })
+
+  describe('history', () => {
+    it('reports nothing for tasks of an earlier page load, however they ended', () => {
+      const found = snapshot([task('c', 'done', stale), task('b', 'cancelled', stale), task('a', 'failed', stale)])
+      expect(taskEventsAtFirstSight(found, LOADED_AT)).toEqual([])
+    })
+
+    it.each<TaskStatus>(['cancelled', 'failed'])('reports nothing when the newest task ended as %s', (status) => {
+      // Only the newest task counts, not a result further down the list.
+      const found = snapshot([task('b', status, fresh), task('a', 'done', fresh)])
+      expect(taskEventsAtFirstSight(found, LOADED_AT)).toEqual([])
+      // And only if it is done, whatever it carries.
+      const carrying = snapshot([task('b', status, { ...fresh, result: { title: 'Title', markdown: '# Title' } })])
+      expect(taskEventsAtFirstSight(carrying, LOADED_AT)).toEqual([])
+    })
+
+    it('reports nothing for a task that is done but has no result to hand over', () => {
+      const found = snapshot([task('a', 'done', { ...fresh, result: null })])
+      expect(taskEventsAtFirstSight(found, LOADED_AT)).toEqual([])
+    })
+
+    it('reports nothing when that result is already open in the viewer', () => {
+      const found = snapshot([task('a', 'done', fresh)], null, 'a')
+      expect(taskEventsAtFirstSight(found, LOADED_AT)).toEqual([])
+    })
+  })
+
+  describe('a task that is running', () => {
+    it('is picked up, as it is when watching begins from nothing', () => {
+      const found = snapshot([task('b', 'running', fresh), task('a', 'done', fresh)], 'b')
+      expect(taskEventsAtFirstSight(found, LOADED_AT)).toEqual([{ type: 'taskStarted', taskId: 'b' }])
+      expect(taskEventsAtFirstSight(found, LOADED_AT)).toEqual(taskEvents(NO_TASKS, found))
+    })
+
+    it('is the only thing reported, even where a finished result stands before it in the list', () => {
+      const found = snapshot([task('b', 'done', fresh), task('a', 'running', fresh)], 'a')
+      expect(taskEventsAtFirstSight(found, LOADED_AT)).toEqual([{ type: 'taskStarted', taskId: 'a' }])
+    })
+  })
+
+  describe('with the tasks store', () => {
+    beforeEach(() => {
+      localStorage.clear()
+    })
+
+    it('finds the result of a task that ran from start to finish before anybody watched', () => {
+      const loadedAt = Date.now()
+      const store = createTasksStore()
+      const created = store.getState().create('first')
+      store.getState().update(created.id, { step: 'writing', message: 'writing' })
+      store.getState().update(created.id, { status: 'done', result: { title: 't', markdown: 'm' }, message: null })
+
+      expect(taskEventsAtFirstSight(store.getState(), loadedAt)).toEqual(handOver(created.id))
+    })
+
+    it('hands a result over once: what follows the first sight is told by `taskEvents` alone', () => {
+      const loadedAt = Date.now()
+      const store = createTasksStore()
+      const created = store.getState().create('first')
+      store.getState().update(created.id, { status: 'done', result: { title: 't', markdown: 'm' }, message: null })
+
+      const seen: TaskEvent[] = [...taskEventsAtFirstSight(store.getState(), loadedAt)]
+      store.subscribe((state, previous) => seen.push(...taskEvents(previous, state)))
+      store.getState().setViewing(created.id)
+      store.getState().setViewing(null)
+
+      expect(seen).toEqual([...handOver(created.id), { type: 'viewerClosed' }])
+    })
+
+    it('stays silent after a reload about a result that an earlier page load produced', () => {
+      // The page that ran the task...
+      const before = createTasksStore()
+      const created = before.getState().create('first')
+      before.getState().update(created.id, { status: 'done', result: { title: 't', markdown: 'm' }, message: null })
+      // ...and the page that is loaded afterwards, which finds the task in storage.
+      const loadedAt = created.createdAt + 1
+      const store = createTasksStore()
+      expect(store.getState().tasks.map(({ id, status }) => ({ id, status }))).toEqual([{ id: created.id, status: 'done' }])
+
+      expect(taskEventsAtFirstSight(store.getState(), loadedAt)).toEqual([])
+    })
   })
 })
