@@ -1,7 +1,8 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { cancelActive, retry, startTask } from '../agent/orchestrator'
+import { useChatActivity } from '../store/chatActivity'
 import { useTasks, type Task } from '../store/tasks'
 import { ComingSoon } from './ComingSoon'
 import { PromptBar } from './PromptBar'
@@ -189,6 +190,96 @@ describe('PromptBar: sending', () => {
     for (const name of ['파일 첨부', /Claude/, '보내기']) {
       await userEvent.tab()
       expect(screen.getByRole('button', { name })).toHaveFocus()
+    }
+  })
+})
+
+describe('PromptBar: telling the character that the chat is being used', () => {
+  /** Counts the reports from now on; the count is read by calling what this returns. */
+  function countReports(): () => number {
+    let reports = 0
+    const unsubscribe = useChatActivity.subscribe((state, previous) => {
+      if (state.at !== previous.at) reports++
+    })
+    onTestFinished(unsubscribe)
+    return () => reports
+  }
+
+  it('reports when the field gets the focus', async () => {
+    render(<PromptBar />)
+    const reports = countReports()
+    await userEvent.tab()
+    expect(field()).toHaveFocus()
+    expect(reports()).toBe(1)
+  })
+
+  it('reports a press on the field, also when the field has the focus already', async () => {
+    render(<PromptBar />)
+    await userEvent.tab()
+    const reports = countReports()
+    fireEvent.pointerDown(field())
+    expect(reports()).toBe(1)
+    fireEvent.pointerDown(field())
+    expect(reports()).toBe(2)
+  })
+
+  it('reports every change of the text: typing, pasting and deleting', async () => {
+    render(<PromptBar />)
+    await userEvent.tab()
+    const reports = countReports()
+    await userEvent.keyboard('a')
+    expect(reports()).toBe(1)
+    await userEvent.keyboard('bc')
+    expect(reports()).toBe(3)
+    await userEvent.paste(' and some more')
+    expect(reports()).toBe(4)
+    await userEvent.keyboard('{Backspace}')
+    expect(reports()).toBe(5)
+    expect(field()).toHaveValue('abc and some mor')
+  })
+
+  it('reports while a Korean syllable is still being put together', () => {
+    render(<PromptBar />)
+    const reports = countReports()
+    fireEvent.compositionStart(field())
+    fireEvent.change(field(), { target: { value: 'ㅎ' } })
+    fireEvent.change(field(), { target: { value: '하' } })
+    expect(reports()).toBe(2)
+    fireEvent.compositionEnd(field())
+    expect(field()).toHaveValue('하')
+  })
+
+  it('reports nothing for the other buttons of the bar', async () => {
+    render(<PromptBar />)
+    const reports = countReports()
+    await userEvent.click(screen.getByRole('button', { name: '파일 첨부' }))
+    await userEvent.click(screen.getByRole('button', { name: /Claude/ }))
+    await userEvent.click(screen.getByRole('button', { name: '보내기' }))
+    expect(reports()).toBe(0)
+  })
+
+  it('reports nothing once the progress pill has taken the place of the field', async () => {
+    render(<PromptBar />)
+    await userEvent.type(field(), 'compare three laptops{Enter}')
+    expect(screen.getByRole('group', { name: '진행 중인 작업' })).toHaveFocus()
+    const reports = countReports()
+    await userEvent.keyboard('{Enter}')
+    await userEvent.tab()
+    await userEvent.click(screen.getByRole('group', { name: '진행 중인 작업' }))
+    expect(reports()).toBe(0)
+  })
+
+  it('counts the focus coming back to the field when the task is over as the chat being used', async () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: false }))
+    try {
+      render(<PromptBar />)
+      await userEvent.type(field(), 'compare three laptops{Enter}')
+      const reports = countReports()
+      act(() => tasks().update(tasks().activeId!, { status: 'cancelled' }))
+      expect(field()).toHaveFocus()
+      expect(reports()).toBe(1)
+    } finally {
+      vi.unstubAllGlobals()
     }
   })
 })

@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { startTask } from '../agent/orchestrator'
+import { useChatActivity } from '../store/chatActivity'
 import { useTasks } from '../store/tasks'
 import { Icon } from './Icon'
 import { ProgressBar, RetryBar } from './ProgressBar'
@@ -39,6 +40,14 @@ const FOCUS_TARGET = '[data-takes-focus]'
 /** True on a device whose pointer is a finger: focusing a text field there calls up the on-screen keyboard. */
 function hasCoarsePointer(): boolean {
   return typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches
+}
+
+/**
+ * Tells whoever watches the chat (the character) that it is being used. Only
+ * the field counts: its focus, a press on it and every change of its text.
+ */
+function reportChatActivity() {
+  useChatActivity.getState().report()
 }
 
 /** The dark panel the user types a prompt into. */
@@ -84,7 +93,14 @@ function PromptForm() {
         placeholder="무엇을 조사해 드릴까요?"
         aria-label="에이전트에게 맡길 일"
         enterKeyHint="send"
-        onChange={(event) => setText(event.target.value)}
+        onFocus={reportChatActivity}
+        // A press on a field that already has the focus is no new focus, but it is somebody about to write.
+        onPointerDown={reportChatActivity}
+        // Every change, also while an input method is still composing a syllable.
+        onChange={(event) => {
+          reportChatActivity()
+          setText(event.target.value)
+        }}
         onKeyDown={onKeyDown}
       />
       <div className="prompt__tools">
