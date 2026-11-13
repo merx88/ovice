@@ -1,7 +1,8 @@
 import { AnimationClip, Euler, Quaternion, Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import { BONE_NAMES, CLIP_NAMES, CLIPS, resolveClip, type ClipName, type Pose } from './index'
-import { HANDOFF_POS, SEAT_GROUND_POS, SOFA_LIFT } from '../../scene/layout'
+import { HANDOFF_POS, SEAT_GROUND_POS, SOFA_FACING, SOFA_LIFT, SOFA_SEAT_POS, SOFA_STAND_POS } from '../../scene/layout'
+import { WALK_PACE } from '../clipForState'
 import { ARM_ON_LEG, armFromLeg, LOUNGE_CLIPS, loungeBase } from './lounge'
 import { MAX_STEP } from '../playback'
 import {
@@ -17,8 +18,9 @@ import {
   type ArmPose,
   type Triple,
 } from './shared'
+import { RUN_CYCLE, RUN_SPEED } from './run'
 import { SIP_GRIP } from './sip'
-import { WALK_SPEED } from './walk'
+import { LEG_LENGTH, WALK_SPEED } from './walk'
 
 const ALL_CLIPS: ClipName[] = [
   'idle',
@@ -38,8 +40,11 @@ const ALL_CLIPS: ClipName[] = [
   'loungeWave',
   'loungeStretch',
   'loungeLookAround',
+  'hopOn',
+  'hopOff',
+  'run',
 ]
-const LOOPS: ClipName[] = ['idle', 'typing', 'think', 'walk', 'holdFile', 'loungeIdle']
+const LOOPS: ClipName[] = ['idle', 'typing', 'think', 'walk', 'holdFile', 'loungeIdle', 'run']
 const ONE_SHOTS = ALL_CLIPS.filter((name) => !LOOPS.includes(name))
 
 /** Fails on a bone the rig does not have, a malformed offset or a non-finite number. */
@@ -515,6 +520,195 @@ describe('on the sofa', () => {
     }
     expect(CLIPS.loungeLookAround.sample(0.75).head?.rot?.[1] ?? 0).toBeGreaterThan(0.4)
     expect(CLIPS.loungeLookAround.sample(2.2).head?.rot?.[1] ?? 0).toBeLessThan(-0.4)
+  })
+})
+
+describe('the seven clips of the sofa', () => {
+  it('are all in the registry', () => {
+    for (const name of ['loungeIdle', 'loungeWave', 'loungeStretch', 'loungeLookAround', 'hopOn', 'hopOff', 'run'] as const) {
+      expect(CLIP_NAMES).toContain(name)
+      expect(CLIPS[name]).toBeDefined()
+    }
+  })
+
+  it.each(['loungeIdle', 'loungeWave', 'loungeStretch', 'loungeLookAround', 'hopOn', 'hopOff', 'run'] as const)('%s moves without a jump', (name) => {
+    // The feet of the run change direction in an instant as they land and leave: fast, not a jump.
+    expectContinuous(name, name === 'run' ? 40 : 18)
+  })
+})
+
+describe('on and off the sofa', () => {
+  const onDuration = CLIPS.hopOn.duration as number
+  const offDuration = CLIPS.hopOff.duration as number
+  /** From the seat spot to the stand spot, in the axes of a character seated on the sofa. */
+  const toStand = (() => {
+    const dx = SOFA_STAND_POS[0] - SOFA_SEAT_POS[0]
+    const dz = SOFA_STAND_POS[2] - SOFA_SEAT_POS[2]
+    return [dx * Math.cos(SOFA_FACING) - dz * Math.sin(SOFA_FACING), 0, dx * Math.sin(SOFA_FACING) + dz * Math.cos(SOFA_FACING)]
+  })()
+  /** Where a pose played on the seat spot has the root in the room. */
+  function rootInRoom(pose: Pose): [number, number, number] {
+    const [x, y, z] = pose['root 1']?.pos ?? [0, 0, 0]
+    const cos = Math.cos(SOFA_FACING)
+    const sin = Math.sin(SOFA_FACING)
+    return [SOFA_SEAT_POS[0] + x * cos + z * sin, y, SOFA_SEAT_POS[2] - x * sin + z * cos]
+  }
+
+  it('takes about 0.6 s to hop on and about 0.35 s to hop off', () => {
+    expect(onDuration).toBeCloseTo(0.6, 1)
+    expect(offDuration).toBeGreaterThan(0.3)
+    expect(offDuration).toBeLessThan(0.4)
+  })
+
+  it('hops on from standing over the stand spot, its back to the sofa', () => {
+    const start = CLIPS.hopOn.sample(0)
+    const [x, y, z] = rootInRoom(start)
+    expect(x).toBeCloseTo(SOFA_STAND_POS[0], 9)
+    expect(y).toBeCloseTo(0, 9)
+    expect(z).toBeCloseTo(SOFA_STAND_POS[2], 9)
+    // Standing as the walk leaves it, but for where it stands.
+    expectSamePose({ ...start, 'root 1': {} }, standingBase)
+  })
+
+  it('hops on into exactly the pose it lounges in', () => {
+    expectSamePose(CLIPS.hopOn.sample(onDuration), CLIPS.loungeIdle.sample(0))
+    expect(poseChange(CLIPS.hopOn.sample(onDuration), CLIPS.loungeIdle.sample(0))).toBeLessThan(STILL)
+  })
+
+  it('goes up before it goes back, over the edge of the cushion, and comes down onto it', () => {
+    let highest = 0
+    let previous = toStand[2]
+    for (let t = 0; t <= onDuration + 1e-9; t += 0.01) {
+      const [x, y, z] = CLIPS.hopOn.sample(t)['root 1']?.pos ?? [0, 0, 0]
+      highest = Math.max(highest, y)
+      // Backwards all the way, never sideways off the line between the two spots.
+      expect(z).toBeLessThanOrEqual(previous + 1e-9)
+      expect(Math.abs(x * toStand[2] - z * toStand[0])).toBeLessThan(1e-9)
+      // Still over the floor in front of the sofa until the hem is above the cushion.
+      if (y < SOFA_LIFT - 0.1) expect(z).toBeGreaterThan(toStand[2] - 0.12)
+      previous = z
+    }
+    expect(highest).toBeGreaterThan(SOFA_LIFT + 0.08)
+  })
+
+  it('hops off from exactly the pose it lounges in', () => {
+    expect(poseChange(CLIPS.hopOff.sample(0), CLIPS.loungeIdle.sample(0))).toBeLessThan(STILL)
+  })
+
+  it('lands over the stand spot in the first stride of the run', () => {
+    const end = CLIPS.hopOff.sample(offDuration)
+    const first = CLIPS.run.sample(0)
+    const [x, , z] = rootInRoom(end)
+    expect(x).toBeCloseTo(SOFA_STAND_POS[0], 9)
+    expect(z).toBeCloseTo(SOFA_STAND_POS[2], 9)
+    // The pose itself is the run's, at the height the run has it.
+    expect(end['root 1']?.pos?.[1]).toBeCloseTo(first['root 1']?.pos?.[1] ?? 0, 9)
+    expect(poseChange({ ...end, 'root 1': {} }, { ...first, 'root 1': {} })).toBeLessThan(STILL)
+  })
+
+  it('leaves the cushion forwards and comes down only once it is off it', () => {
+    let previous = 0
+    for (let t = 0; t <= offDuration + 1e-9; t += 0.01) {
+      const [, y, z] = CLIPS.hopOff.sample(t)['root 1']?.pos ?? [0, 0, 0]
+      expect(z).toBeGreaterThanOrEqual(previous - 1e-9)
+      if (z < toStand[2] * 0.4) expect(y).toBeGreaterThan(SOFA_LIFT - 0.02)
+      previous = z
+    }
+  })
+})
+
+describe('run', () => {
+  /** One foot of a running pose: how far ahead of the hip it is, how far below it, and how far below the hip the floor is (m). */
+  function foot(pose: Pose, side: 'L' | 'R') {
+    const angle = -(pose[`Leg_${side}.001`]?.rot?.[0] ?? 0)
+    const length = LEG_LENGTH - (pose[`foot_IK_${side}`]?.pos?.[1] ?? 0)
+    const floor = LEG_LENGTH + (pose['root 1']?.pos?.[1] ?? 0)
+    return { ahead: length * Math.sin(angle), above: floor - length * Math.cos(angle) }
+  }
+  const ON_FLOOR = 1e-9
+
+  it('strides at a hurry: at least twice the brisk walk, and 2.7 m/s or more', () => {
+    expect(RUN_SPEED).toBeGreaterThanOrEqual(2 * WALK_SPEED * WALK_PACE)
+    expect(RUN_SPEED).toBeGreaterThanOrEqual(2.7)
+    expect(RUN_SPEED).toBeLessThan(4.5)
+  })
+
+  it('loops without a seam', () => {
+    expect(CLIPS.run.duration).toBeNull()
+    for (const t of [0, 0.04, 0.11, 0.2, 0.29]) expect(poseChange(CLIPS.run.sample(t), CLIPS.run.sample(t + RUN_CYCLE))).toBeLessThan(STILL)
+    // Left and right take turns: half a cycle on, the legs have swapped.
+    const now = CLIPS.run.sample(0.05)
+    const later = CLIPS.run.sample(0.05 + RUN_CYCLE / 2)
+    expect(foot(later, 'R').ahead).toBeCloseTo(foot(now, 'L').ahead, 9)
+    expect(foot(later, 'L').above).toBeCloseTo(foot(now, 'R').above, 9)
+  })
+
+  it('takes quicker steps than the brisk walk does', () => {
+    const walkCycle = 0.52 / WALK_PACE
+    expect(RUN_CYCLE).toBeLessThan(walkCycle)
+  })
+
+  it('keeps the foot on the floor where it is: it goes back under the body at exactly the running speed', () => {
+    const step = 1e-4
+    let onFloor = 0
+    for (let t = 0; t < RUN_CYCLE; t += 0.001) {
+      for (const side of ['L', 'R'] as const) {
+        const now = foot(CLIPS.run.sample(t), side)
+        const next = foot(CLIPS.run.sample(t + step), side)
+        if (Math.abs(now.above) > ON_FLOOR || Math.abs(next.above) > ON_FLOOR) continue
+        onFloor++
+        expect((next.ahead - now.ahead) / step).toBeCloseTo(-RUN_SPEED, 6)
+      }
+    }
+    expect(onFloor).toBeGreaterThan(50)
+  })
+
+  it('never puts a foot through the floor, and has both feet in the air between steps', () => {
+    let flying = 0
+    let both = 0
+    const samples = 300
+    for (let i = 0; i < samples; i++) {
+      const pose = CLIPS.run.sample((i / samples) * RUN_CYCLE)
+      const left = foot(pose, 'L')
+      const right = foot(pose, 'R')
+      expect(left.above).toBeGreaterThan(-ON_FLOOR)
+      expect(right.above).toBeGreaterThan(-ON_FLOOR)
+      if (left.above > 0.002 && right.above > 0.002) flying++
+      if (left.above < ON_FLOOR && right.above < ON_FLOOR) both++
+    }
+    expect(both).toBe(0)
+    expect(flying / samples).toBeGreaterThan(0.3)
+  })
+
+  it('bounces: lowest as a foot takes the weight, highest in mid-air', () => {
+    const heights: number[] = []
+    for (let i = 0; i < 300; i++) heights.push(CLIPS.run.sample((i / 300) * RUN_CYCLE)['root 1']?.pos?.[1] ?? 0)
+    expect(Math.max(...heights) - Math.min(...heights)).toBeGreaterThan(0.04)
+    const lowest = heights.indexOf(Math.min(...heights))
+    const pose = CLIPS.run.sample((lowest / 300) * RUN_CYCLE)
+    expect(Math.min(foot(pose, 'L').above, foot(pose, 'R').above)).toBeLessThan(ON_FLOOR)
+    const highest = heights.indexOf(Math.max(...heights))
+    const inAir = CLIPS.run.sample((highest / 300) * RUN_CYCLE)
+    expect(Math.min(foot(inAir, 'L').above, foot(inAir, 'R').above)).toBeGreaterThan(0.01)
+  })
+
+  it('leans into it and pumps the arms against the legs', () => {
+    for (let t = 0; t < RUN_CYCLE; t += 0.01) {
+      const pose = CLIPS.run.sample(t)
+      // Leaning far further forward than the walk does, the head held up.
+      expect(pose.body?.rot?.[0] ?? 0).toBeGreaterThan(0.3)
+      expect(pose.head?.rot?.[0] ?? 0).toBeLessThan(-0.2)
+    }
+    // As the left foot lands in front, the left arm is back and the right arm forward.
+    const landing = CLIPS.run.sample(0)
+    expect(foot(landing, 'L').ahead).toBeGreaterThan(0.05)
+    expect(handAxes(landing, 'L').fingers.z).toBeLessThan(handAxes(landing, 'R').fingers.z)
+    const other = CLIPS.run.sample(RUN_CYCLE / 2)
+    expect(handAxes(other, 'R').fingers.z).toBeLessThan(handAxes(other, 'L').fingers.z)
+    // The elbows stay bent.
+    for (const t of [0, RUN_CYCLE / 4, RUN_CYCLE / 2]) {
+      expect(Math.abs(CLIPS.run.sample(t)['arm_L.002']?.rot?.[1] ?? 0)).toBeGreaterThan(0.6)
+    }
   })
 })
 

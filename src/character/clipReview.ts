@@ -4,7 +4,8 @@
 //
 //   ?clip=wave                  one clip, played again and again
 //   ?clip=standUp,walk,sitDown  several, one after the other, round and round
-//   &at=desk|floor|sofa         where the character is (default: where the first clip belongs)
+//   &at=desk|floor|sofa         where the character is (default: where the first clip belongs); at the
+//                               sofa, the walking and running clips are shown standing in front of it
 //   &look=0.5,1.2,3             a point in the room to look at
 //   &speed=1.5                  how fast the clips play
 //   &hold=2                     how long (s) a looping clip is shown before the next one
@@ -31,12 +32,13 @@ export interface ClipReviewRequest {
 const PLACES: readonly ReviewPlace[] = ['desk', 'floor', 'sofa']
 
 /** The clips that are played standing on the floor, and those that are played on the sofa; every other clip is played at the desk. */
-const STANDING_CLIPS: readonly ClipName[] = ['walk', 'holdFile']
+const STANDING_CLIPS: readonly ClipName[] = ['walk', 'run', 'holdFile']
+const SOFA_CLIPS: readonly ClipName[] = [...LOUNGE_CLIPS, 'hopOn', 'hopOff']
 
 /** Where `clip` is at home. */
 export function placeOf(clip: ClipName): ReviewPlace {
   if (STANDING_CLIPS.includes(clip)) return 'floor'
-  return LOUNGE_CLIPS.includes(clip) ? 'sofa' : 'desk'
+  return SOFA_CLIPS.includes(clip) ? 'sofa' : 'desk'
 }
 
 function isClipName(name: string): name is ClipName {

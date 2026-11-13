@@ -60,6 +60,9 @@ export type ClipName =
   | 'loungeWave'
   | 'loungeStretch'
   | 'loungeLookAround'
+  | 'hopOn'
+  | 'hopOff'
+  | 'run'
 
 export type Triple = [number, number, number]
 

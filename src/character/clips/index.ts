@@ -2,9 +2,11 @@
 // same name shipped inside the model takes its place.
 import type { AnimationClip } from 'three'
 import { holdFile } from './holdFile'
+import { hopOff, hopOn } from './hop'
 import { idle } from './idle'
 import { lookAround } from './lookAround'
 import { loungeIdle, loungeLookAround, loungeStretch, loungeWave } from './lounge'
+import { run } from './run'
 import { scratchHead } from './scratchHead'
 import type { ClipName, ProceduralClip } from './shared'
 import { sip } from './sip'
@@ -38,6 +40,9 @@ export const CLIPS: Record<ClipName, ProceduralClip> = {
   loungeWave,
   loungeStretch,
   loungeLookAround,
+  hopOn,
+  hopOff,
+  run,
 }
 
 export const CLIP_NAMES = Object.keys(CLIPS) as ClipName[]

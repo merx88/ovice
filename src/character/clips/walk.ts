@@ -10,7 +10,7 @@ const STEP = { height: 0.05, toesUp: 0.22 } as const
 /** How far each arm swings, in radians. */
 const ARM_SWING = 0.4
 /** From the hip joint down to the ankle, which is all the leg this character has. */
-const LEG_LENGTH = 0.18 * CHARACTER_HEIGHT
+export const LEG_LENGTH = 0.18 * CHARACTER_HEIGHT
 
 /**
  * The speed (m/s) to move the character at while this clip plays: the speed at

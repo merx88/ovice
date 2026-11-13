@@ -7,6 +7,7 @@ import {
   Euler,
   LoopOnce,
   LoopRepeat,
+  Matrix4,
   Quaternion,
   Vector3,
   type AnimationAction,
@@ -15,6 +16,7 @@ import {
 } from 'three'
 import type { Vec3 } from '../scene/layout'
 import { tokens } from '../theme/tokens'
+import { carryOver, rootReach } from './carryOver'
 import { CLIPS, resolveClip, type ClipName } from './clips'
 import { LOUNGE_CLIPS } from './clips/lounge'
 import { SIP_GRIP } from './clips/sip'
@@ -135,6 +137,7 @@ function writeBones(rig: Rig, from: BoneTransform[]) {
 const scratchQuaternion = new Quaternion()
 const scratchEuler = new Euler()
 const scratchVector = new Vector3()
+const scratchMatrix = new Matrix4()
 const palm = new Vector3()
 
 /**
@@ -170,6 +173,9 @@ export function Character(props: CharacterProps) {
       /** What the mixer last wrote, so that it finds the bones as it left them. */
       mixed: boneTransforms(rig),
       look: { head: 0, body: 0, pitch: 0 },
+      /** Where the character was placed in the last frame, and how far the pose shown then held the root away from there. */
+      placed: null as { position: [number, number, number]; facing: number } | null,
+      reach: 0,
       head: new Vector3(),
       blink: { untilNext: BLINK.minGap as number, elapsed: BLINK.duration as number },
     }),
@@ -211,6 +217,21 @@ export function Character(props: CharacterProps) {
     const { started, justFinished, fadeWeight } = advancePlayback(state.playback, clip, step, duration, clipSpeed)
     if (started) {
       copyTransforms(state.shown, state.fadeFrom)
+      // A hop is played from the sofa's seat spot with the root held out to where the body is, so the
+      // placement jumps where a hop joins a walk or a run. The body must not: what the fade starts
+      // from is carried over into the new placement. (Any other jump of the placement stays a jump.)
+      const was = state.placed
+      const jumped = was !== null && (was.facing !== facing || was.position.some((value, axis) => value !== position[axis]))
+      const reach = Math.max(state.reach, resolved.kind === 'procedural' ? rootReach(resolved.clip.sample(0)) : 0)
+      if (was && jumped && reach > 0 && fadeWeight < 1) {
+        const root = rig.byName['root 1'].bone
+        const from = state.fadeFrom[rig.joints.findIndex((joint) => joint.bone === root)]
+        if (root.parent) {
+          root.parent.updateWorldMatrix(true, false)
+          scratchMatrix.copy(body.current.matrixWorld).invert().multiply(root.parent.matrixWorld)
+          carryOver(from.position, from.quaternion, scratchMatrix, was, placement)
+        }
+      }
       state.action?.stop()
       state.action = null
       if (resolved.kind === 'glb') {
@@ -226,8 +247,11 @@ export function Character(props: CharacterProps) {
     }
     if (resolved.kind === 'procedural') {
       const { time } = state.playback
-      applyPose(rig, resolved.clip.sample(duration === null ? time : Math.min(time, duration)))
+      const pose = resolved.clip.sample(duration === null ? time : Math.min(time, duration))
+      state.reach = rootReach(pose)
+      applyPose(rig, pose)
     } else {
+      state.reach = 0
       // The mixer only writes a bone when its value changes, so hand the bones back as it left them.
       writeBones(rig, state.mixed)
       mixer.update(started ? 0 : step * clipSpeed)
@@ -296,6 +320,13 @@ export function Character(props: CharacterProps) {
       }
       folder.current.position.copy(body.current.worldToLocal(scratchVector)).add(FOLDER_OFFSET)
     }
+
+    if (state.placed) {
+      state.placed.position[0] = position[0]
+      state.placed.position[1] = position[1]
+      state.placed.position[2] = position[2]
+      state.placed.facing = facing
+    } else state.placed = { position: [position[0], position[1], position[2]], facing }
 
     if (justFinished) onClipFinished(clip)
   }, POSE_PRIORITY)

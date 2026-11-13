@@ -1,8 +1,8 @@
 import { useFrame } from '@react-three/fiber'
 import { useCallback, useRef, useState } from 'react'
-import { HANDOFF_FACING, HANDOFF_POS, SEAT_FACING, SEAT_GROUND_POS, SOFA_FACING, SOFA_SEAT_POS } from '../scene/layout'
+import { HANDOFF_FACING, HANDOFF_POS, SEAT_FACING, SEAT_GROUND_POS, SOFA_FACING, SOFA_SEAT_POS, SOFA_STAND_POS } from '../scene/layout'
 import { Character, type CharacterPlacement } from './Character'
-import { isLoop, type ClipReviewRequest, type ReviewPlace } from './clipReview'
+import { isLoop, placeOf, type ClipReviewRequest, type ReviewPlace } from './clipReview'
 import { MAX_STEP } from './playback'
 
 const PLACEMENTS: Record<ReviewPlace, CharacterPlacement> = {
@@ -10,6 +10,12 @@ const PLACEMENTS: Record<ReviewPlace, CharacterPlacement> = {
   floor: { position: [...HANDOFF_POS], facing: HANDOFF_FACING },
   sofa: { position: [...SOFA_SEAT_POS], facing: SOFA_FACING },
 }
+/**
+ * In front of the sofa, its back to it: where the character stands before it
+ * hops on. A list at the sofa shows its walking and running clips here, so
+ * that it shows how they join the hops.
+ */
+const BEFORE_SOFA: CharacterPlacement = { position: [...SOFA_STAND_POS], facing: SOFA_FACING }
 
 /** A clip played on its own holds its last pose this long (s) before it starts again. */
 const PAUSE_BEFORE_REPEAT = 0.8
@@ -55,7 +61,7 @@ export function ClipReview({ request }: { request: ClipReviewRequest }) {
       key={alone ? played : 0}
       clip={clip}
       clipSpeed={speed}
-      placement={PLACEMENTS[place]}
+      placement={place === 'sofa' && placeOf(clip) === 'floor' ? BEFORE_SOFA : PLACEMENTS[place]}
       lookTarget={look}
       badge="hidden"
       holdingFile={clip === 'holdFile'}

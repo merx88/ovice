@@ -62,7 +62,8 @@ describe('placeOf', () => {
     expect(placeOf('sitDown')).toBe('desk')
     expect(placeOf('walk')).toBe('floor')
     expect(placeOf('holdFile')).toBe('floor')
-    for (const clip of ['loungeIdle', 'loungeWave', 'loungeStretch', 'loungeLookAround'] as const) expect(placeOf(clip)).toBe('sofa')
+    for (const clip of ['loungeIdle', 'loungeWave', 'loungeStretch', 'loungeLookAround', 'hopOn', 'hopOff'] as const) expect(placeOf(clip)).toBe('sofa')
+    expect(placeOf('run')).toBe('floor')
   })
 })
 
@@ -70,6 +71,8 @@ describe('isLoop', () => {
   it('tells the clips that run on from those that end', () => {
     expect(isLoop('idle')).toBe(true)
     expect(isLoop('loungeIdle')).toBe(true)
+    expect(isLoop('run')).toBe(true)
+    expect(isLoop('hopOn')).toBe(false)
     expect(isLoop('loungeWave')).toBe(false)
     expect(isLoop('walk')).toBe(true)
     expect(isLoop('wave')).toBe(false)
