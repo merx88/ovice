@@ -40,6 +40,30 @@ describe('App', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
+  it('puts the interface next to the office, not inside the canvas', () => {
+    stubWebGL(true)
+    render(<App />)
+    const tab = screen.getByRole('button', { name: 'Office' })
+    expect(screen.getByTestId('canvas')).not.toContainElement(tab)
+  })
+
+  it('keeps the interface when WebGL is unavailable', () => {
+    stubWebGL(false)
+    render(<App />)
+    expect(screen.getByRole('alert')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Office' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '설정' })).toBeInTheDocument()
+  })
+
+  it('keeps the interface when the scene fails', () => {
+    stubWebGL(true)
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    scene.fails = true
+    render(<App />)
+    expect(screen.getByRole('alert')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Office' })).toBeInTheDocument()
+  })
+
   it('shows the notice instead of the canvas when WebGL is unavailable', () => {
     stubWebGL(false)
     render(<App />)

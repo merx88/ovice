@@ -1,0 +1,302 @@
+/*
+ * The 2D interface drawn over the 3D office: what every part of it shares,
+ * the bar along the top and the "coming soon" notice. Sizes were measured on
+ * the reference screens (1728 × 1117); colours come from `theme/tokens.ts`
+ * as custom properties (`--c-…`, see `theme/cssVars.ts`).
+ */
+
+:root {
+  /*
+   * One pixel of the reference screens. Everything is sized in these, so the
+   * interface keeps the reference's proportions next to the 3D scene, which
+   * shrinks and grows with the window as well. Never smaller than three
+   * quarters, so that text stays readable and buttons stay big enough to hit.
+   */
+  --u: clamp(0.75px, min(100vw / 1728, 100vh / 1117), 1px);
+  /* How far the outermost controls keep from the sides and from the bottom. */
+  --edge: calc(var(--u) * 39);
+  --edge-bottom: calc(var(--u) * 31);
+}
+
+@media (max-width: 900px) {
+  :root {
+    --edge: 16px;
+  }
+}
+
+@media (max-width: 767px) {
+  :root {
+    --u: 0.75px;
+    --edge-bottom: 16px;
+  }
+}
+
+/* --- What everything shares ------------------------------------------------ */
+
+.ui {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  /* The scene underneath stays clickable; only the controls take the pointer. */
+  pointer-events: none;
+  color: var(--c-black);
+  font-size: calc(var(--u) * 19);
+  font-weight: 500;
+  line-height: 1.3;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.ui :where(button, a, input, textarea, select) {
+  pointer-events: auto;
+}
+
+.ui :where(button) {
+  appearance: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.ui :where(button, a, input, [tabindex]):focus-visible,
+.bubbles :focus-visible {
+  outline: max(2px, calc(var(--u) * 3)) solid var(--focus, var(--c-folder-blue));
+  outline-offset: max(2px, calc(var(--u) * 2));
+}
+
+/* Switched on by the "reduce motion" setting. */
+.ui--still,
+.ui--still *,
+.ui--still *::before,
+.ui--still *::after {
+  transition: none !important;
+  animation: none !important;
+}
+
+/* For screen readers only. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.icon {
+  display: block;
+  flex: none;
+  width: calc(var(--u) * var(--icon, 24));
+  height: calc(var(--u) * var(--icon, 24));
+}
+
+/* --- The bar along the top -------------------------------------------------- */
+
+.topbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: grid;
+  /* The tabs sit in the middle of the page while there is room; the buttons on the right never give way. */
+  grid-template-columns: 1fr auto 1fr;
+  align-items: start;
+  column-gap: calc(var(--u) * 16);
+  padding: max(calc(var(--u) * 31), env(safe-area-inset-top)) max(var(--edge), env(safe-area-inset-right)) 0
+    max(var(--edge), env(safe-area-inset-left));
+}
+
+.logo {
+  display: block;
+  justify-self: start;
+  width: calc(var(--u) * 64);
+  height: calc(var(--u) * 64);
+  /* The mark stands a little higher than the pills beside it, and a hair further out. */
+  margin: calc(var(--u) * -8) 0 0 calc(var(--u) * -1);
+  color: var(--c-ui-black);
+}
+
+.tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  box-sizing: border-box;
+  width: calc(var(--u) * 388);
+  height: calc(var(--u) * 64);
+  padding: calc(var(--u) * 2.5);
+  border: max(1px, calc(var(--u) * 1.5)) solid var(--c-black);
+  border-radius: calc(var(--u) * 32);
+  background: var(--c-white);
+  pointer-events: auto;
+}
+
+.tab {
+  border-radius: calc(var(--u) * 28);
+  color: var(--c-black);
+  padding-top: calc(var(--u) * 1);
+  font-size: calc(var(--u) * 22);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  transition: background-color 120ms ease;
+}
+
+.tab:hover {
+  background: color-mix(in srgb, var(--c-ui-black) 8%, transparent);
+}
+
+.tab[aria-current='page'] {
+  background: var(--c-ui-black);
+  color: var(--c-white);
+  cursor: default;
+}
+
+.topbar__end {
+  display: flex;
+  justify-self: end;
+  gap: calc(var(--u) * 16);
+  margin-top: calc(var(--u) * 1);
+}
+
+.office,
+.round {
+  display: flex;
+  align-items: center;
+  height: calc(var(--u) * 64);
+  border-radius: calc(var(--u) * 32);
+  background: var(--c-ui-dark);
+  color: var(--c-white);
+  transition: background-color 120ms ease;
+}
+
+.office:hover,
+.round:hover {
+  background: color-mix(in srgb, var(--c-ui-dark) 86%, var(--c-white));
+}
+
+.office {
+  padding: 0 calc(var(--u) * 18) 0 calc(var(--u) * 4);
+  font-size: calc(var(--u) * 19.5);
+  letter-spacing: -0.03em;
+  white-space: nowrap;
+}
+
+.office__pin {
+  display: grid;
+  place-items: center;
+  width: calc(var(--u) * 56);
+  height: calc(var(--u) * 56);
+  margin-right: calc(var(--u) * 13);
+  border-radius: 50%;
+  background: var(--c-white);
+  color: var(--c-ui-orange);
+}
+
+.office__caret {
+  display: grid;
+  place-items: center;
+  width: calc(var(--u) * 20);
+  height: calc(var(--u) * 20);
+  margin-left: calc(var(--u) * 20);
+  border-radius: 50%;
+  background: var(--c-ui-grey);
+  color: var(--c-ui-dark);
+}
+
+.round {
+  justify-content: center;
+  width: calc(var(--u) * 64);
+}
+
+/* --- The "coming soon" notice ----------------------------------------------- */
+
+.toast {
+  position: absolute;
+  top: calc(max(calc(var(--u) * 31), env(safe-area-inset-top)) + var(--u) * 84);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  display: flex;
+  justify-content: center;
+  padding: 0 16px;
+}
+
+.toast__notice {
+  padding: calc(var(--u) * 14) calc(var(--u) * 26);
+  border-radius: calc(var(--u) * 28);
+  background: var(--c-ui-dark);
+  box-shadow: 0 calc(var(--u) * 8) calc(var(--u) * 24) color-mix(in srgb, var(--c-ui-black) 18%, transparent);
+  color: var(--c-white);
+  font-size: calc(var(--u) * 18);
+  animation: toast-in 160ms ease-out;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(calc(var(--u) * -8));
+  }
+}
+
+/* --- Narrow screens ---------------------------------------------------------- */
+
+@media (max-width: 767px) {
+  .topbar {
+    /* The logo and the tabs share the first row; the round buttons move below them, to the right. */
+    grid-template-columns: auto minmax(0, 1fr);
+    row-gap: 8px;
+    column-gap: 8px;
+    padding-top: max(12px, env(safe-area-inset-top));
+  }
+
+  .logo {
+    margin: 0;
+  }
+
+  .tabs {
+    justify-self: end;
+    width: min(calc(var(--u) * 388), 100%);
+  }
+
+  .topbar__end {
+    grid-column: 1 / -1;
+    gap: 8px;
+    margin-top: 0;
+  }
+
+  /* The office pill is only its pin; its name stays there for screen readers. */
+  .office {
+    padding: 0 calc(var(--u) * 4);
+  }
+
+  .office__pin {
+    margin-right: 0;
+  }
+
+  .office__name {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .office__caret {
+    display: none;
+  }
+
+  .toast {
+    top: calc(max(12px, env(safe-area-inset-top)) + 120px);
+  }
+}
+
+@media (max-width: 359px) {
+  .tab {
+    font-size: 14px;
+  }
+}

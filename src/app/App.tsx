@@ -6,8 +6,10 @@ import { OfficeScene } from '../scene/OfficeScene'
 import { SceneErrorBoundary, SceneFallback } from '../scene/SceneErrorBoundary'
 import { isWebGLAvailable } from '../scene/webgl'
 import { tokens } from '../theme/tokens'
+import { Overlay } from '../ui/Overlay'
 
-export function App() {
+/** The 3D office, or a notice in its place where WebGL is missing or the scene fails. */
+function Scene() {
   const [webgl] = useState(isWebGLAvailable)
   if (!webgl) return <SceneFallback />
   return (
@@ -23,5 +25,15 @@ export function App() {
         <OfficeScene />
       </Canvas>
     </SceneErrorBoundary>
+  )
+}
+
+export function App() {
+  return (
+    <>
+      <Scene />
+      {/* Beside the scene, not inside it: the interface keeps working whatever happens to the 3D part. */}
+      <Overlay />
+    </>
   )
 }
