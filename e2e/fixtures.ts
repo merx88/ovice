@@ -199,6 +199,22 @@ export async function openTasks(page: Page): Promise<Locator> {
 }
 
 /**
+ * Holds the character's model back, as a slow connection does, until the
+ * function this returns is called. Call it before the page is opened.
+ */
+export async function holdModel(page: Page): Promise<() => void> {
+  let letThrough = () => {}
+  const held = new Promise<void>((resolve) => {
+    letThrough = resolve
+  })
+  await page.route('**/models/ovice_guy.glb', async (route) => {
+    await held
+    await route.continue()
+  })
+  return letThrough
+}
+
+/**
  * Every state the character's bubbles have been in since the page was
  * loaded, oldest first: each entry is the lines that showed together, and an
  * empty entry is the character falling silent.

@@ -1,6 +1,22 @@
 // What must not go wrong: a reload in the middle of a task, a prompt that is
-// HTML, an impatient Enter, a browser without WebGL.
-import { expect, openTasks, pillTexts, progressPill, promptField, send, test, viewer } from './fixtures'
+// HTML, an impatient Enter, a connection slower than the task, a browser
+// without WebGL.
+import {
+  bubbles,
+  DONE_LINES,
+  expect,
+  folder,
+  HANDOVER_TIMEOUT,
+  holdModel,
+  openTasks,
+  pillTexts,
+  progressPill,
+  promptField,
+  said,
+  send,
+  test,
+  viewer,
+} from './fixtures'
 
 test('a reload in the middle of a task leaves it cancelled, and the pill does not come back', async ({ page }) => {
   const prompt = 'Plan a three-day trip to Busan'
@@ -65,6 +81,31 @@ test('Enter pressed twice in a row starts one task and does not stop it', async 
   const panel = await openTasks(page)
   await expect(panel.getByRole('listitem')).toHaveCount(1)
   await expect(panel.locator('.task__status')).toHaveText(['완료'])
+})
+
+test.describe('on a connection so slow that the task is over before the character has arrived', () => {
+  // The walk is not what this is about.
+  test.use({ reduceMotion: true })
+
+  test('the result is brought out all the same, once the character is there', async ({ page }) => {
+    const prompt = 'Draft an agenda for the kick-off meeting'
+    const letModelThrough = await holdModel(page)
+    await page.goto('/?fast=1')
+
+    // The task runs from start to finish, and no character is there to say a word about it.
+    await send(page, prompt)
+    await expect.poll(() => pillTexts(page)).toEqual([prompt])
+    await expect(progressPill(page)).toHaveCount(0)
+    expect(await said(page)).toEqual([])
+
+    letModelThrough()
+
+    // It arrives, finds the result waiting and brings it out: nothing about the steps it never saw.
+    await expect(bubbles(page)).toHaveText(DONE_LINES, { timeout: HANDOVER_TIMEOUT })
+    expect(await said(page)).toEqual([[DONE_LINES[0]], DONE_LINES])
+    await folder(page).press('Enter')
+    await expect(viewer(page)).toHaveAccessibleName(prompt)
+  })
 })
 
 test.describe('in a browser without WebGL', () => {
