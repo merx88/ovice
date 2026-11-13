@@ -6,5 +6,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: 'src/test/setup.ts',
+    // Stylesheets stay switched off in tests, except where a test asks for one as text (`?raw`).
+    css: { include: /\.css\?raw$/ },
   },
 })

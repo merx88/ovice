@@ -8,6 +8,6 @@ body,
 }
 
 body {
-  font-family: 'Inter', 'Pretendard', system-ui, sans-serif;
+  font-family: 'Inter', 'Pretendard Variable', Pretendard, system-ui, -apple-system, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
   -webkit-font-smoothing: antialiased;
 }
