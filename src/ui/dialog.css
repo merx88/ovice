@@ -309,7 +309,7 @@
 }
 
 .segment__input:focus-visible + .segment__face {
-  outline: 3px solid var(--c-folder-blue);
+  outline: 3px solid var(--c-ui-focus);
   outline-offset: 2px;
 }
 
@@ -391,7 +391,7 @@
 }
 
 .switch__input:focus-visible ~ .switch__track {
-  outline: 3px solid var(--c-folder-blue);
+  outline: 3px solid var(--c-ui-focus);
   outline-offset: 2px;
 }
 

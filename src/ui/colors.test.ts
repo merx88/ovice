@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { cssVarName } from '../theme/cssVars'
+import { tokens } from '../theme/tokens'
 
 // Colours are defined in `src/theme/tokens.ts` and nowhere else: stylesheets
 // get them as custom properties (`var(--c-…)`), components import the tokens.
@@ -39,6 +41,13 @@ describe('colours in the interface', () => {
       })
       .map(({ line, text }) => `${name}:${line}: ${text.trim()}`)
     expect(found).toEqual([])
+  })
+
+  // A colour that is read but not defined makes its whole declaration void: no error, the rule just stops applying.
+  it.each(Object.keys(stylesheets))('%s reads only colours that are defined', (name) => {
+    const defined = new Set(Object.keys(tokens).map(cssVarName))
+    const read = [...stylesheets[name].matchAll(/var\(\s*(--c-[\w-]+)/g)].map((match) => match[1])
+    expect(read.filter((property) => !defined.has(property))).toEqual([])
   })
 
   it.each(Object.keys(components))('%s holds no colour literal', (name) => {

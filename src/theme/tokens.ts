@@ -9,7 +9,6 @@ export const tokens = {
   chrome: '#D3D1D6',
   yellow: '#F9B605',
   skyblue: '#90A6C1',
-  folderBlue: '#0E8BF3',
   mint: '#54DABF',
   pink: '#F7D9D7',
   white: '#FFFFFF',
@@ -41,6 +40,8 @@ export const tokens = {
   uiField: '#999999',
   // The outline of the model chip (ref 2).
   uiChipEdge: '#C6C6C6',
+  // The ring round whatever has the keyboard's focus: a blue that shows on the pale page and on the dark surfaces.
+  uiFocus: '#0E8BF3',
   // The search pill of the library panel (ref 2); hairlines and muted text on dark surfaces.
   uiSilver: '#D6D6D6',
   // The speech bubble, shaded from its top edge to its bottom edge (refs 1 and 3).

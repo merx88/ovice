@@ -74,7 +74,7 @@
 }
 
 .ui :where(button, a, input, [tabindex]):focus-visible {
-  outline: max(2px, calc(var(--u) * 3)) solid var(--focus, var(--c-folder-blue));
+  outline: max(2px, calc(var(--u) * 3)) solid var(--focus, var(--c-ui-focus));
   outline-offset: max(2px, calc(var(--u) * 2));
 }
 

@@ -70,14 +70,14 @@ function showHandCursor(over: boolean) {
 }
 
 /**
- * The result file: a blue folder with a tab and a sheet of paper showing at
+ * The result file: an orange folder with a tab and a sheet of paper showing at
  * its top edge. Origin: its centre; the front faces +z, leaning back a little.
  * Move it by the position of the group its ref points at. It can be clicked
  * in 3D, and a transparent button laid over it makes it reachable from the
  * keyboard.
  */
 export const Folder = forwardRef<Group, FolderProps>(function Folder({ onClick }, ref) {
-  const blue = glossy(tokens.folderBlue)
+  const cover = glossy(tokens.orange)
   const coverZ = (DEPTH - COVER.thickness) / 2
   const group = useRef<Group>(null)
   const button = useRef<Group>(null)
@@ -109,10 +109,10 @@ export const Folder = forwardRef<Group, FolderProps>(function Folder({ onClick }
         onPointerOver={() => showHandCursor(true)}
         onPointerOut={() => showHandCursor(false)}
       >
-        <mesh geometry={backGeometry} material={blue} position={[0, 0, -coverZ]} castShadow />
+        <mesh geometry={backGeometry} material={cover} position={[0, 0, -coverZ]} castShadow />
         <mesh
           geometry={tabGeometry}
-          material={blue}
+          material={cover}
           position={[(TAB.width - WIDTH) / 2, HEIGHT / 2 + TAB.rise - TAB.height / 2, -coverZ]}
           castShadow
         />
@@ -121,7 +121,7 @@ export const Folder = forwardRef<Group, FolderProps>(function Folder({ onClick }
           material={matte(tokens.white)}
           position={[0, PAPER.show - FRONT_DROP + PAPER.inset / 2, 0]}
         />
-        <mesh geometry={frontGeometry} material={blue} position={[0, -FRONT_DROP / 2, coverZ]} castShadow />
+        <mesh geometry={frontGeometry} material={cover} position={[0, -FRONT_DROP / 2, coverZ]} castShadow />
       </group>
       <group ref={button}>
         <Html
