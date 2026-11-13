@@ -40,11 +40,21 @@ export const CANCEL_LINE = 'Okay, stopping.'
  */
 export const HANDOVER_TIMEOUT = 150_000
 
+/**
+ * How many frames `characterLoaded` lets the scene draw after the character's
+ * model has arrived: half as many again as it took the character to appear
+ * on the machine this was written on (6 to 10), where a frame takes a second.
+ */
+const FRAMES_UNTIL_CHARACTER = 15
+
 /** The record the page keeps for the tests (see `recordWhatIsShown`). */
 interface Shown {
   said: string[][]
   pill: string[]
-  /** How many frames the page has drawn since the character's model arrived, and when that was (ms); null until it has. */
+  /**
+   * How many frames the page has drawn since the character's model arrived,
+   * counted up to `FRAMES_UNTIL_CHARACTER`, and when it arrived (ms); null until it has.
+   */
   model: { frames: number; arrivedAt: number } | null
 }
 
@@ -59,9 +69,11 @@ declare global {
  * character's speech bubbles and every text of the progress pill, in the
  * order they came up. With shortened timings a line can be gone again before
  * a test gets to look at the page; the record has it all the same. It also
- * counts the frames drawn since the character's model arrived.
+ * counts the first `framesToCount` frames drawn after the character's model
+ * has arrived, and then stops asking for frames: a page with nothing moving
+ * on it would not draw any.
  */
-function recordWhatIsShown() {
+function recordWhatIsShown(framesToCount: number) {
   const shown: Shown = { said: [], pill: [], model: null }
   window.__shown = shown
 
@@ -70,7 +82,7 @@ function recordWhatIsShown() {
     else if (performance.getEntriesByType('resource').some((entry) => entry.name.endsWith('/models/ovice_guy.glb'))) {
       shown.model = { frames: 0, arrivedAt: now }
     }
-    requestAnimationFrame(onFrame)
+    if (!shown.model || shown.model.frames < framesToCount) requestAnimationFrame(onFrame)
   }
   requestAnimationFrame(onFrame)
 
@@ -146,7 +158,7 @@ export const test = base.extend<Options>({
   page: async ({ page, reduceMotion, webgl }, use) => {
     await answerFontHosts(page)
     const trouble = watchForTrouble(page)
-    await page.addInitScript(recordWhatIsShown)
+    await page.addInitScript(recordWhatIsShown, FRAMES_UNTIL_CHARACTER)
     if (reduceMotion) await page.addInitScript(seedReducedMotion)
     if (!webgl) await page.addInitScript(refuseWebGL)
 
@@ -232,10 +244,9 @@ export function pillTexts(page: Page): Promise<string[]> {
  * Waits until the character has most likely appeared. Nothing in the page's
  * DOM says when it has: its model is downloaded and unpacked after the page
  * has loaded, and the character then simply sits there. This waits until the
- * scene has been drawn a number of times since the model arrived: half as
- * many again as it took on the machine this was written on, where a frame
- * takes a second. On a fast machine the frames are over at once and the
- * seconds decide.
+ * scene has been drawn `FRAMES_UNTIL_CHARACTER` times since the model
+ * arrived. On a fast machine those frames are over at once and the seconds
+ * decide.
  *
  * It is a head start, not a proof. A test that needs to know the character
  * is there goes on to something only a character that is there does: saying
@@ -247,7 +258,7 @@ export async function characterLoaded(page: Page) {
       const model = window.__shown?.model
       return model != null && model.frames >= frames && performance.now() - model.arrivedAt >= ms
     },
-    { frames: 15, ms: 3000 },
+    { frames: FRAMES_UNTIL_CHARACTER, ms: 3000 },
     { polling: 250, timeout: 120_000 },
   )
 }

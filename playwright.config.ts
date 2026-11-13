@@ -13,6 +13,7 @@ const SOFTWARE_WEBGL = ['--use-gl=angle', '--use-angle=swiftshader', '--enable-u
 /**
  * A Chromium to use instead of the one Playwright installs for itself
  * (`npx playwright install chromium`), for machines that come with a browser.
+ * Where it is set, it is used whatever `channel` says.
  */
 const CHROMIUM = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
 
@@ -33,6 +34,10 @@ export default defineConfig({
   use: {
     baseURL: BASE_URL,
     browserName: 'chromium',
+    // The whole browser, run without a window, not the cut-down "headless
+    // shell" Playwright otherwise picks: it is what visitors have, and it
+    // draws this page twice as fast.
+    channel: 'chromium',
     // Small, because the frame rate depends on the size of the canvas. Wide
     // enough for the desktop layout; `e2e/layout.spec.ts` has the phone.
     viewport: { width: 800, height: 520 },

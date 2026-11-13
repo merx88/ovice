@@ -21,10 +21,11 @@ npm run dev    # 개발 서버 실행
 
 ```bash
 npm test       # 단위 테스트 (약 20초)
-npm run e2e    # 실제 브라우저로 전체 흐름 확인 (그래픽 카드가 없는 컴퓨터에서는 몇 분)
+npm run e2e    # 실제 브라우저로 전체 흐름 확인 (4~5분)
 ```
 
 `npm run e2e`는 사이트를 빌드해서 띄운 다음, Chromium 브라우저로 "프롬프트 보내기 → 결과 받기 → 문서 열기" 같은 흐름을 직접 해 봅니다.
+어느 컴퓨터에서나 같은 결과가 나오도록 3D 화면을 그래픽 카드 없이 그리기 때문에 시간이 좀 걸립니다.
 처음 한 번은 `npx playwright install chromium`으로 테스트용 브라우저를 설치해야 합니다.
 이미 설치된 Chromium을 쓰려면 `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`에 실행 파일 경로를 넣고 실행합니다.
 
