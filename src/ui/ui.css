@@ -71,8 +71,7 @@
   touch-action: manipulation;
 }
 
-.ui :where(button, a, input, [tabindex]):focus-visible,
-.bubbles :focus-visible {
+.ui :where(button, a, input, [tabindex]):focus-visible {
   outline: max(2px, calc(var(--u) * 3)) solid var(--focus, var(--c-folder-blue));
   outline-offset: max(2px, calc(var(--u) * 2));
 }
@@ -117,8 +116,8 @@
   grid-template-columns: 1fr auto 1fr;
   align-items: start;
   column-gap: calc(var(--u) * 16);
-  padding: max(calc(var(--u) * 31), env(safe-area-inset-top)) max(var(--edge), env(safe-area-inset-right)) 0
-    max(var(--edge), env(safe-area-inset-left));
+  padding: max(calc(var(--u) * 31), calc(env(safe-area-inset-top) + 4px)) max(var(--edge), env(safe-area-inset-right))
+    0 max(var(--edge), env(safe-area-inset-left));
 }
 
 .logo {
@@ -155,8 +154,10 @@
   transition: background-color 120ms ease;
 }
 
-.tab:hover {
-  background: color-mix(in srgb, var(--c-ui-black) 8%, transparent);
+@media (hover: hover) {
+  .tab:hover {
+    background: color-mix(in srgb, var(--c-ui-black) 8%, transparent);
+  }
 }
 
 .tab[aria-current='page'] {
@@ -183,9 +184,11 @@
   transition: background-color 120ms ease;
 }
 
-.office:hover,
-.round:hover {
-  background: color-mix(in srgb, var(--c-ui-dark) 86%, var(--c-white));
+@media (hover: hover) {
+  .office:hover,
+  .round:hover {
+    background: color-mix(in srgb, var(--c-ui-dark) 86%, var(--c-white));
+  }
 }
 
 .office {
@@ -247,7 +250,7 @@
 
 .toast {
   position: absolute;
-  top: calc(max(calc(var(--u) * 31), env(safe-area-inset-top)) + var(--u) * 84);
+  top: calc(max(calc(var(--u) * 31), calc(env(safe-area-inset-top) + 4px)) + var(--u) * 84);
   left: 0;
   right: 0;
   z-index: 30;
@@ -282,7 +285,7 @@
     align-items: center;
     row-gap: 8px;
     column-gap: 8px;
-    padding-top: max(12px, env(safe-area-inset-top));
+    padding-top: max(12px, calc(env(safe-area-inset-top) + 4px));
   }
 
   .logo {
@@ -336,7 +339,7 @@
   }
 
   .toast {
-    top: calc(max(12px, env(safe-area-inset-top)) + 124px);
+    top: calc(max(12px, calc(env(safe-area-inset-top) + 4px)) + 124px);
   }
 }
 

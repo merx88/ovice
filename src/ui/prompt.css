@@ -72,8 +72,10 @@
   transition: background-color 120ms ease;
 }
 
-.prompt__plus:hover {
-  background: color-mix(in srgb, var(--c-white) 12%, transparent);
+@media (hover: hover) {
+  .prompt__plus:hover {
+    background: color-mix(in srgb, var(--c-white) 12%, transparent);
+  }
 }
 
 /* The model chip: a grey glass tile, a little brighter towards its rim. */
@@ -98,8 +100,10 @@
   transition: filter 120ms ease;
 }
 
-.chip:hover {
-  filter: brightness(1.1);
+@media (hover: hover) {
+  .chip:hover {
+    filter: brightness(1.1);
+  }
 }
 
 .chip__name {
@@ -121,8 +125,10 @@
   transition: background-color 120ms ease;
 }
 
-.prompt__send:hover {
-  background: color-mix(in srgb, var(--c-ui-send) 80%, var(--c-white));
+@media (hover: hover) {
+  .prompt__send:hover {
+    background: color-mix(in srgb, var(--c-ui-send) 80%, var(--c-white));
+  }
 }
 
 /* --- The pills ---------------------------------------------------------------- */
@@ -197,8 +203,10 @@
   transition: background-color 120ms ease;
 }
 
-.pill__retry:hover {
-  background: color-mix(in srgb, var(--c-white) 86%, var(--c-ui-black));
+@media (hover: hover) {
+  .pill__retry:hover {
+    background: color-mix(in srgb, var(--c-white) 86%, var(--c-ui-black));
+  }
 }
 
 .pill__close {
@@ -211,8 +219,10 @@
   transition: background-color 120ms ease;
 }
 
-.pill__close:hover {
-  background: color-mix(in srgb, var(--c-ui-black) 12%, transparent);
+@media (hover: hover) {
+  .pill__close:hover {
+    background: color-mix(in srgb, var(--c-ui-black) 12%, transparent);
+  }
 }
 
 /* The step marks around the disc of the progress pill. */

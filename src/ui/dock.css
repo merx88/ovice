@@ -34,8 +34,10 @@
     color 120ms ease;
 }
 
-.dock__button:hover {
-  background: color-mix(in srgb, var(--c-ui-button) 84%, var(--c-white));
+@media (hover: hover) {
+  .dock__button:hover {
+    background: color-mix(in srgb, var(--c-ui-button) 84%, var(--c-white));
+  }
 }
 
 /* The button of the open panel is the white one. */
@@ -91,8 +93,10 @@
   transition: transform 120ms ease;
 }
 
-.tile:hover {
-  transform: scale(1.04);
+@media (hover: hover) {
+  .tile:hover {
+    transform: scale(1.04);
+  }
 }
 
 .tile svg {
@@ -119,8 +123,10 @@
   transition: background-color 120ms ease;
 }
 
-.search:hover {
-  background: color-mix(in srgb, var(--c-ui-silver) 80%, var(--c-white));
+@media (hover: hover) {
+  .search:hover {
+    background: color-mix(in srgb, var(--c-ui-silver) 80%, var(--c-white));
+  }
 }
 
 .search__disc {
@@ -188,8 +194,10 @@
   transition: background-color 120ms ease;
 }
 
-.task--open:hover {
-  background: color-mix(in srgb, var(--c-ui-button) 80%, var(--c-white));
+@media (hover: hover) {
+  .task--open:hover {
+    background: color-mix(in srgb, var(--c-ui-button) 80%, var(--c-white));
+  }
 }
 
 .task__body {

@@ -54,7 +54,7 @@ export function ProgressBar() {
   const current = task.step === null ? 0 : STEP_ORDER.indexOf(task.step) + 1
 
   return (
-    <div className="pill pill--progress" role="group" aria-label="진행 중인 작업">
+    <div className="pill pill--progress" role="group" aria-label="진행 중인 작업" tabIndex={-1} data-takes-focus="">
       <span
         className="pill__disc"
         role="progressbar"
@@ -87,7 +87,7 @@ export interface RetryBarProps {
 /** The red pill a failed task leaves in place of the prompt bar: try the same prompt again, or close it. */
 export function RetryBar({ task, onDismiss }: RetryBarProps) {
   return (
-    <div className="pill pill--failed" role="group" aria-label="실패한 작업">
+    <div className="pill pill--failed" role="group" aria-label="실패한 작업" tabIndex={-1} data-takes-focus="">
       <span className="pill__disc">
         <Icon name="alert" size={30} />
       </span>

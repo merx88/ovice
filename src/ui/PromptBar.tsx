@@ -33,6 +33,14 @@ function useFailedHere(): [failedId: string | null, dismiss: () => void] {
   return [failedId, () => setFailedId(null)]
 }
 
+/** Marks what takes the focus when it replaces whatever had the focus in the slot before. */
+const FOCUS_TARGET = '[data-takes-focus]'
+
+/** True on a device whose pointer is a finger: focusing a text field there calls up the on-screen keyboard. */
+function hasCoarsePointer(): boolean {
+  return typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches
+}
+
 /** The dark panel the user types a prompt into. */
 function PromptForm() {
   const [text, setText] = useState('')
@@ -70,6 +78,7 @@ function PromptForm() {
       <textarea
         ref={field}
         className="prompt__field"
+        data-takes-focus=""
         rows={1}
         value={text}
         placeholder="무엇을 조사해 드릴까요?"
@@ -106,9 +115,36 @@ export function PromptBar() {
   const failed = useTasks((state) =>
     failedId === null ? undefined : state.tasks.find((task) => task.id === failedId && task.status === 'failed'),
   )
+  const showing = activeId !== null ? 'progress' : failed ? 'retry' : 'form'
+
+  const slot = useRef<HTMLDivElement>(null)
+  /** Whether the focus was inside the slot when it was last heard of. Swapping the slot's content removes it silently. */
+  const focusWasInside = useRef(false)
+
+  // When the part that had the focus is replaced, the focus goes to the part that replaced it instead of
+  // being lost: to the pill itself (never to a button on it, which a repeated Enter would press), and back
+  // to the field afterwards — except where that would call up an on-screen keyboard nobody asked for.
+  useLayoutEffect(() => {
+    if (!focusWasInside.current || slot.current?.contains(document.activeElement)) return
+    if (document.activeElement !== document.body && document.activeElement !== null) return
+    if (showing === 'form' && hasCoarsePointer()) {
+      focusWasInside.current = false
+      return
+    }
+    slot.current?.querySelector<HTMLElement>(FOCUS_TARGET)?.focus({ preventScroll: true })
+  }, [showing])
 
   return (
-    <div className="slot">
+    <div
+      ref={slot}
+      className="slot"
+      onFocus={() => {
+        focusWasInside.current = true
+      }}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) focusWasInside.current = false
+      }}
+    >
       {activeId !== null ? (
         <ProgressBar />
       ) : failed ? (

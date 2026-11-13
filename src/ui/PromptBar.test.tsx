@@ -227,6 +227,95 @@ describe('PromptBar: while a task is running', () => {
   })
 })
 
+describe('PromptBar: where the keyboard is after the bar changes', () => {
+  const pill = () => screen.getByRole('group', { name: '진행 중인 작업' })
+
+  /** Makes the device report the kind of pointer given, as `matchMedia('(pointer: coarse)')` would. */
+  function pointer(kind: 'fine' | 'coarse') {
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: kind === 'coarse' && query.includes('coarse') }))
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('moves to the progress pill after a prompt is sent, not onto its ✕', async () => {
+    render(<PromptBar />)
+    await userEvent.type(field(), 'compare three laptops{Enter}')
+    expect(pill()).toHaveFocus()
+
+    // Enter pressed once more must not stop the task that has just started.
+    await userEvent.keyboard('{Enter}')
+    expect(cancelActive).not.toHaveBeenCalled()
+    expect(tasks().tasks).toHaveLength(1)
+    expect(screen.getByRole('progressbar')).toBeInTheDocument()
+  })
+
+  it('reaches the ✕ with the next Tab', async () => {
+    render(<PromptBar />)
+    await userEvent.type(field(), 'compare three laptops{Enter}')
+    await userEvent.tab()
+    expect(screen.getByRole('button', { name: '작업 취소' })).toHaveFocus()
+  })
+
+  it('returns to the field when the task ends while the keyboard is still on the pill', async () => {
+    pointer('fine')
+    render(<PromptBar />)
+    await userEvent.type(field(), 'compare three laptops{Enter}')
+    act(() => tasks().update(tasks().activeId!, { status: 'done', result: { title: 't', markdown: 'm' } }))
+    expect(field()).toHaveFocus()
+  })
+
+  it('returns to the field after the task was stopped from the keyboard', async () => {
+    pointer('fine')
+    render(<PromptBar />)
+    await userEvent.type(field(), 'compare three laptops{Enter}')
+    await userEvent.tab()
+    await userEvent.keyboard('{Enter}')
+    expect(cancelActive).toHaveBeenCalledTimes(1)
+    expect(field()).toHaveFocus()
+  })
+
+  it('leaves the focus alone when the user has moved on in the meantime', async () => {
+    pointer('fine')
+    render(
+      <>
+        <PromptBar />
+        <button type="button">somewhere else</button>
+      </>,
+    )
+    await userEvent.type(field(), 'compare three laptops{Enter}')
+    const elsewhere = screen.getByRole('button', { name: 'somewhere else' })
+    elsewhere.focus()
+    act(() => tasks().update(tasks().activeId!, { status: 'done', result: { title: 't', markdown: 'm' } }))
+    expect(elsewhere).toHaveFocus()
+  })
+
+  it('does not take the focus when the bar changes without the user having been in it', () => {
+    pointer('fine')
+    render(<PromptBar />)
+    const id = start('started some other way')
+    expect(document.body).toHaveFocus()
+    act(() => tasks().update(id, { status: 'done', result: { title: 't', markdown: 'm' } }))
+    expect(document.body).toHaveFocus()
+  })
+
+  it('does not call up the on-screen keyboard of a touch device when the task ends', async () => {
+    pointer('coarse')
+    render(<PromptBar />)
+    await userEvent.type(field(), 'compare three laptops{Enter}')
+    act(() => tasks().update(tasks().activeId!, { status: 'done', result: { title: 't', markdown: 'm' } }))
+    expect(field()).not.toHaveFocus()
+  })
+
+  it('moves to the retry pill when the task fails', async () => {
+    render(<PromptBar />)
+    await userEvent.type(field(), 'compare three laptops{Enter}')
+    act(() => tasks().update(tasks().activeId!, { status: 'failed' }))
+    expect(screen.getByRole('group', { name: '실패한 작업' })).toHaveFocus()
+  })
+})
+
 describe('PromptBar: when a task fails', () => {
   it('shows the retry button, which starts the same prompt again', async () => {
     render(<PromptBar />)

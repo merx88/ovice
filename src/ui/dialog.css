@@ -108,9 +108,11 @@
   transition: background-color 120ms ease;
 }
 
-.dialog__action:hover,
-.dialog__close:hover {
-  background: color-mix(in srgb, var(--c-ui-dark) 82%, var(--c-white));
+@media (hover: hover) {
+  .dialog__action:hover,
+  .dialog__close:hover {
+    background: color-mix(in srgb, var(--c-ui-dark) 82%, var(--c-white));
+  }
 }
 
 .dialog__action {
