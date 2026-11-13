@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useSettings } from '../store/settings'
 import { ComingSoon } from './ComingSoon'
+import { Dock } from './Dock'
 import { PromptBar } from './PromptBar'
 import { TopBar } from './TopBar'
 import './ui.css'
@@ -19,6 +20,7 @@ export function Overlay() {
       <TopBar onOpenSettings={() => setSettingsOpen(true)} />
       <main className="bottom">
         <PromptBar />
+        <Dock />
       </main>
       <ComingSoon />
     </div>

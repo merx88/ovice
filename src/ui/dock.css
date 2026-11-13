@@ -1,0 +1,250 @@
+/*
+ * The bottom right corner of the interface: the dock, and the panel that
+ * opens above it (the tasks, or the library). Sizes are the reference's
+ * (1728 px wide), in design units (`--u`, see ui.css).
+ */
+
+.corner {
+  position: relative;
+  grid-column: 3;
+  justify-self: end;
+}
+
+/* --- The dock ------------------------------------------------------------------ */
+
+.dock {
+  display: flex;
+  gap: calc(var(--u) * 2);
+  padding: calc(var(--u) * 4);
+  border-radius: calc(var(--u) * 32);
+  background: var(--c-ui-dark);
+  pointer-events: auto;
+}
+
+.dock__button {
+  display: grid;
+  place-items: center;
+  width: calc(var(--u) * 56);
+  height: calc(var(--u) * 56);
+  border-radius: 50%;
+  background: var(--c-ui-button);
+  color: var(--c-white);
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+.dock__button:hover {
+  background: color-mix(in srgb, var(--c-ui-button) 84%, var(--c-white));
+}
+
+/* The button of the open panel is the white one. */
+.dock__button[aria-expanded='true'] {
+  background: var(--c-white);
+  color: var(--c-ui-black);
+}
+
+/* --- The panel above the dock ---------------------------------------------------- */
+
+.panel {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + var(--u) * 10);
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: calc(var(--u) * 323);
+  max-height: calc(100vh - var(--u) * 240);
+  padding: calc(var(--u) * 16);
+  border-radius: calc(var(--u) * 40);
+  /* See-through, as in the reference: over the wall this is the dark of the dock, over furniture it is darker. */
+  background: color-mix(in srgb, var(--c-ui-black) 80%, transparent);
+  color: var(--c-white);
+  pointer-events: auto;
+  animation: panel-in 160ms ease-out;
+}
+
+.panel:focus-visible {
+  outline-offset: calc(var(--u) * -4);
+}
+
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(calc(var(--u) * 8));
+  }
+}
+
+/* --- The library ------------------------------------------------------------------ */
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: calc(var(--u) * 7.5) calc(var(--u) * 8.5);
+}
+
+.tile {
+  display: block;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: calc(var(--u) * 22);
+  transition: transform 120ms ease;
+}
+
+.tile:hover {
+  transform: scale(1.04);
+}
+
+.tile svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.search {
+  display: flex;
+  align-items: center;
+  flex: none;
+  box-sizing: border-box;
+  width: 100%;
+  height: calc(var(--u) * 56);
+  margin-top: calc(var(--u) * 24);
+  padding: calc(var(--u) * 4);
+  border-radius: calc(var(--u) * 28);
+  background: var(--c-ui-silver);
+  color: var(--c-ui-black);
+  font-size: calc(var(--u) * 21);
+  letter-spacing: -0.025em;
+  text-align: left;
+  transition: background-color 120ms ease;
+}
+
+.search:hover {
+  background: color-mix(in srgb, var(--c-ui-silver) 80%, var(--c-white));
+}
+
+.search__disc {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: calc(var(--u) * 48);
+  height: calc(var(--u) * 48);
+  margin-right: calc(var(--u) * 17);
+  border-radius: 50%;
+  background: var(--c-white);
+}
+
+/* --- The tasks ---------------------------------------------------------------------- */
+
+.panel--tasks {
+  /* As tall as the library at most, so the two panels take the same place. */
+  height: calc(var(--u) * 401);
+}
+
+.panel__title {
+  flex: none;
+  margin: 0;
+  padding: calc(var(--u) * 6) calc(var(--u) * 8) calc(var(--u) * 14);
+  font-size: calc(var(--u) * 20);
+  font-weight: 700;
+}
+
+.panel__empty {
+  margin: auto;
+  padding: calc(var(--u) * 16);
+  color: var(--c-ui-silver);
+  font-size: calc(var(--u) * 17);
+  text-align: center;
+}
+
+.tasks {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 8);
+  min-height: 0;
+  /* Room for the keyboard's ring, which the scrolling would cut off otherwise. */
+  margin: calc(var(--u) * -4);
+  padding: calc(var(--u) * 4);
+  overflow-y: auto;
+  list-style: none;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--c-ui-grey) transparent;
+}
+
+.task {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 8);
+  box-sizing: border-box;
+  width: 100%;
+  padding: calc(var(--u) * 12) calc(var(--u) * 14) calc(var(--u) * 12) calc(var(--u) * 16);
+  border-radius: calc(var(--u) * 22);
+  background: var(--c-ui-button);
+  text-align: left;
+}
+
+.task--open {
+  transition: background-color 120ms ease;
+}
+
+.task--open:hover {
+  background: color-mix(in srgb, var(--c-ui-button) 80%, var(--c-white));
+}
+
+.task__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: calc(var(--u) * 6);
+  min-width: 0;
+}
+
+/* The prompt, on two lines at most. */
+.task__prompt {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: calc(var(--u) * 16);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.task__meta {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 10);
+  color: var(--c-ui-silver);
+  font-size: calc(var(--u) * 14);
+}
+
+.task__status {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--u) * 6);
+  color: var(--c-white);
+  font-weight: 600;
+}
+
+/* A dot in the colour of the status; the label says the same in words. */
+.task__status::before {
+  width: calc(var(--u) * 9);
+  height: calc(var(--u) * 9);
+  border-radius: 50%;
+  background: var(--c-ui-field);
+  content: '';
+}
+
+.task__status[data-status='running']::before {
+  background: var(--c-ui-orange);
+}
+
+.task__status[data-status='done']::before {
+  background: var(--c-mint);
+}
+
+.task__status[data-status='failed']::before {
+  background: var(--c-danger);
+}
