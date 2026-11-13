@@ -78,6 +78,22 @@ function pieces(geometry: BufferGeometry): Box3[] {
   return [...boxes.values()].sort((a, b) => area(b) - area(a))
 }
 
+/**
+ * The triangles that make up the flat fronts (`side` 1) and backs (-1) of a
+ * symbol's solids: those that lie at one depth. `first` is the index of the
+ * triangle's first corner.
+ */
+function faces(geometry: BufferGeometry) {
+  const points = vertices(geometry)
+  const found: { first: number; side: 1 | -1; corners: [number, number, number][] }[] = []
+  for (let first = 0; first < points.length; first += 3) {
+    const corners = [points[first], points[first + 1], points[first + 2]]
+    const depth = corners[0][2]
+    if (corners.every(([, , z]) => Math.abs(z - depth) < 1e-9)) found.push({ first, side: depth > 0 ? 1 : -1, corners })
+  }
+  return found
+}
+
 describe('the status symbols', () => {
   it.each(NAMES)('%s: its bounding box is centred on the origin', (name) => {
     const centre = boundsOf(SYMBOLS[name]()).getCenter(new Vector3())
@@ -117,19 +133,14 @@ describe('the status symbols', () => {
     expect(depth).toBeLessThan(0.25)
   })
 
-  it.each(NAMES)('%s has a front and a back that lie flat and face straight out', (name) => {
+  it.each(NAMES)('%s has fronts and backs that lie flat and face straight out', (name) => {
     const geometry = SYMBOLS[name]()
-    const points = vertices(geometry)
     const normal = geometry.getAttribute('normal')
-    const depth = sizeOf(geometry).z
     const area = { front: 0, back: 0 }
     let tilted = 0
-    for (let corner = 0; corner < points.length; corner += 3) {
-      const [a, b, c] = [points[corner], points[corner + 1], points[corner + 2]]
-      const side = [1, -1].find((sign) => [a, b, c].every(([, , z]) => Math.abs(z - (sign * depth) / 2) < 1e-7))
-      if (side === undefined) continue
+    for (const { first, side, corners: [a, b, c] } of faces(geometry)) {
       area[side === 1 ? 'front' : 'back'] += Math.abs((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])) / 2
-      for (let i = corner; i < corner + 3; i++) if (normal.getZ(i) !== side) tilted++
+      for (let i = first; i < first + 3; i++) if (normal.getZ(i) !== side) tilted++
     }
     expect(tilted).toBe(0)
     expect(area.front).toBeGreaterThan(0.002)
@@ -137,16 +148,12 @@ describe('the status symbols', () => {
   })
 
   // Rounding an edge further than its outline curves folds the face over itself, which shows as a tangle.
-  it.each(NAMES)('%s has a front face without a fold: no two of its triangles overlap', (name) => {
-    const geometry = SYMBOLS[name]()
-    const points = vertices(geometry)
-    const front = Math.max(...points.map(([, , z]) => z))
+  it.each(NAMES)('%s has fronts without a fold: no two of their triangles overlap', (name) => {
     const CELL = 0.0005
     const covered = new Map<number, number>()
     let overlaps = 0
-    for (let corner = 0; corner < points.length; corner += 3) {
-      const [a, b, c] = [points[corner], points[corner + 1], points[corner + 2]]
-      if (![a, b, c].every(([, , z]) => z > front - 1e-7)) continue
+    for (const { side, corners: [a, b, c] } of faces(SYMBOLS[name]())) {
+      if (side !== 1) continue
       const twice = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
       if (Math.abs(twice) < 1e-12) continue
       const xs = [a[0], b[0], c[0]]
