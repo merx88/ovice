@@ -1,0 +1,247 @@
+/*
+ * The bottom centre of the interface: the prompt panel, and the pills that
+ * stand in for it while a task is running or after one has failed.
+ * Sizes are the reference's (1728 px wide), in design units (`--u`, see ui.css).
+ */
+
+/* --- The prompt panel --------------------------------------------------------- */
+
+.prompt {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 16);
+  box-sizing: border-box;
+  width: 100%;
+  /* The reference's panel stands a pixel higher than the dock beside it. */
+  margin-bottom: calc(var(--u) * 1);
+  padding: calc(var(--u) * 16) calc(var(--u) * 30.5);
+  border: max(2px, calc(var(--u) * 3)) solid var(--c-ui-black);
+  border-radius: calc(var(--u) * 52);
+  background: var(--c-ui-dark);
+  color: var(--c-white);
+  pointer-events: auto;
+}
+
+.prompt__field {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  /* One line is as tall as the reference's field; five lines before it scrolls. */
+  min-height: calc(var(--u) * 48);
+  max-height: calc(var(--u) * 144);
+  margin: 0;
+  padding: calc(var(--u) * 12) calc(var(--u) * 17);
+  border: 0;
+  border-radius: calc(var(--u) * 24);
+  outline: 0;
+  background: var(--c-ui-field);
+  color: var(--c-white);
+  font: inherit;
+  font-size: calc(var(--u) * 19);
+  line-height: calc(var(--u) * 24);
+  resize: none;
+  overflow-y: auto;
+  pointer-events: auto;
+}
+
+.prompt__field::placeholder {
+  color: color-mix(in srgb, var(--c-white) 80%, transparent);
+  opacity: 1;
+}
+
+.prompt__field:focus-visible {
+  outline: max(2px, calc(var(--u) * 2)) solid var(--c-white);
+  outline-offset: 0;
+}
+
+.prompt__tools {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 16);
+  /* The send button reaches a little past the field's right edge. */
+  margin-right: calc(var(--u) * -3);
+}
+
+.prompt__plus {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: calc(var(--u) * 48);
+  height: calc(var(--u) * 48);
+  border-radius: 50%;
+  transition: background-color 120ms ease;
+}
+
+.prompt__plus:hover {
+  background: color-mix(in srgb, var(--c-white) 12%, transparent);
+}
+
+/* The model chip: a grey glass tile, a little brighter towards its rim. */
+.chip {
+  display: flex;
+  align-items: center;
+  flex: none;
+  box-sizing: border-box;
+  height: calc(var(--u) * 56);
+  padding: 0 calc(var(--u) * 12.5) 0 calc(var(--u) * 10.5);
+  border: max(2px, calc(var(--u) * 2.5)) solid var(--c-ui-chip-edge);
+  border-radius: calc(var(--u) * 14);
+  background: radial-gradient(
+    ellipse 75% 95% at 50% 50%,
+    color-mix(in srgb, var(--c-ui-grey) 94%, var(--c-ui-black)),
+    color-mix(in srgb, var(--c-ui-grey) 88%, var(--c-white))
+  );
+  color: var(--c-white);
+  font-size: calc(var(--u) * 19);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  transition: filter 120ms ease;
+}
+
+.chip:hover {
+  filter: brightness(1.1);
+}
+
+.chip__name {
+  margin: 0 calc(var(--u) * 8.5) 0 calc(var(--u) * 6);
+}
+
+.prompt__send {
+  display: grid;
+  place-items: center;
+  flex: none;
+  box-sizing: border-box;
+  width: calc(var(--u) * 54);
+  height: calc(var(--u) * 54);
+  margin-left: auto;
+  border: max(2px, calc(var(--u) * 3)) solid var(--c-ui-field);
+  border-radius: 50%;
+  background: var(--c-ui-send);
+  color: var(--c-white);
+  transition: background-color 120ms ease;
+}
+
+.prompt__send:hover {
+  background: color-mix(in srgb, var(--c-ui-send) 80%, var(--c-white));
+}
+
+/* --- The pills ---------------------------------------------------------------- */
+
+.pill {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  width: min(calc(var(--u) * 700), 100%);
+  height: calc(var(--u) * 64);
+  /* …and its pills a pixel lower. */
+  margin: 0 auto calc(var(--u) * -1);
+  padding: calc(var(--u) * 4);
+  border-radius: calc(var(--u) * 32);
+  color: var(--c-ui-black);
+  pointer-events: auto;
+  /* Blue would not show on these: the keyboard's ring is black here. */
+  --focus: var(--c-ui-black);
+}
+
+.pill--progress {
+  background: var(--c-ui-orange);
+}
+
+.pill--failed {
+  background: var(--c-danger);
+}
+
+.pill__disc {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: calc(var(--u) * 56);
+  height: calc(var(--u) * 56);
+  margin-right: calc(var(--u) * 17);
+  border-radius: 50%;
+  background: var(--c-white);
+}
+
+.pill--failed .pill__disc {
+  color: var(--c-danger);
+}
+
+.pill__text {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  /* The reference sets the line a little below the pill's middle. */
+  padding-top: calc(var(--u) * 2);
+  overflow: hidden;
+  font-size: calc(var(--u) * 19);
+  letter-spacing: -0.023em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pill__lead {
+  margin-right: calc(var(--u) * 12);
+  font-weight: 700;
+}
+
+.pill__retry {
+  flex: none;
+  min-height: 44px;
+  height: calc(var(--u) * 48);
+  margin-left: calc(var(--u) * 12);
+  padding: 0 calc(var(--u) * 22);
+  border-radius: calc(var(--u) * 24);
+  background: var(--c-white);
+  font-size: calc(var(--u) * 18);
+  font-weight: 700;
+  transition: background-color 120ms ease;
+}
+
+.pill__retry:hover {
+  background: color-mix(in srgb, var(--c-white) 86%, var(--c-ui-black));
+}
+
+.pill__close {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: calc(var(--u) * 56);
+  height: calc(var(--u) * 56);
+  border-radius: 50%;
+  transition: background-color 120ms ease;
+}
+
+.pill__close:hover {
+  background: color-mix(in srgb, var(--c-ui-black) 12%, transparent);
+}
+
+/* The step marks around the disc of the progress pill. */
+.ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.ring__step {
+  fill: none;
+  stroke: var(--c-ui-silver);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.ring__step[data-step='done'],
+.ring__step[data-step='now'] {
+  stroke: var(--c-ui-black);
+}
+
+.ring__step[data-step='now'] {
+  animation: step-now 1.2s ease-in-out infinite;
+}
+
+@keyframes step-now {
+  50% {
+    opacity: 0.25;
+  }
+}

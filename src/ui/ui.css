@@ -213,6 +213,27 @@
   width: calc(var(--u) * 64);
 }
 
+/* --- The row along the bottom: the prompt in the middle, the dock on the right --- */
+
+.bottom {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: end;
+  column-gap: 16px;
+  padding: 0 max(var(--edge), env(safe-area-inset-right)) max(var(--edge-bottom), env(safe-area-inset-bottom))
+    max(var(--edge), env(safe-area-inset-left));
+}
+
+/* What the prompt bar puts in the middle. Never so wide that it meets the dock. */
+.slot {
+  grid-column: 2;
+  width: min(calc(var(--u) * 777), calc(100vw - 2 * (var(--u) * 180 + var(--edge) + 16px)));
+}
+
 /* --- The "coming soon" notice ----------------------------------------------- */
 
 .toast {

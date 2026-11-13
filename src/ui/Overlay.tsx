@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useSettings } from '../store/settings'
 import { ComingSoon } from './ComingSoon'
+import { PromptBar } from './PromptBar'
 import { TopBar } from './TopBar'
 import './ui.css'
 
@@ -16,6 +17,9 @@ export function Overlay() {
     <div className={reduceMotion ? 'ui ui--still' : 'ui'}>
       <h1 className="sr-only">ovice</h1>
       <TopBar onOpenSettings={() => setSettingsOpen(true)} />
+      <main className="bottom">
+        <PromptBar />
+      </main>
       <ComingSoon />
     </div>
   )
