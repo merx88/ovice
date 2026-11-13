@@ -2,7 +2,9 @@ import { useState } from 'react'
 import { useSettings } from '../store/settings'
 import { ComingSoon } from './ComingSoon'
 import { Dock } from './Dock'
+import { DocViewer } from './DocViewer'
 import { PromptBar } from './PromptBar'
+import { SettingsDialog } from './SettingsDialog'
 import { TopBar } from './TopBar'
 import './ui.css'
 
@@ -12,7 +14,7 @@ import './ui.css'
  */
 export function Overlay() {
   const reduceMotion = useSettings((state) => state.reduceMotion)
-  const [, setSettingsOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   return (
     <div className={reduceMotion ? 'ui ui--still' : 'ui'}>
@@ -23,6 +25,8 @@ export function Overlay() {
         <Dock />
       </main>
       <ComingSoon />
+      <DocViewer />
+      {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
     </div>
   )
 }
