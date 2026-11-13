@@ -72,16 +72,22 @@ export function CoffeeCup(props: GroupProps) {
 
 // --- Laptop -----------------------------------------------------------------
 
+/**
+ * Wide and tall enough for its lid to hide both of the character's hands on
+ * the keys from the camera, wherever the pointer has taken the camera.
+ */
 const LAPTOP = {
-  width: 0.5,
-  depth: 0.32,
+  width: 0.55,
+  depth: 0.352,
   baseHeight: 0.02,
-  lidHeight: 0.3,
+  lidHeight: 0.33,
   lidThickness: 0.014,
   corner: 0.006,
   /** How far the open lid leans back from vertical, in radians. */
   lidLean: 0.26,
   bezel: 0.02,
+  /** The keys lie this far above the base, so that the two do not flicker. */
+  keysLift: 0.0005,
 } as const
 
 /**
@@ -101,7 +107,11 @@ export function Laptop(props: GroupProps) {
         castShadow
         receiveShadow
       />
-      <mesh material={dark} position={[0, LAPTOP.baseHeight, -LAPTOP.depth * 0.12]} rotation={[-Math.PI / 2, 0, 0]}>
+      <mesh
+        material={dark}
+        position={[0, LAPTOP.baseHeight + LAPTOP.keysLift, -LAPTOP.depth * 0.12]}
+        rotation={[-Math.PI / 2, 0, 0]}
+      >
         <planeGeometry args={[LAPTOP.width - LAPTOP.bezel * 4, LAPTOP.depth * 0.5]} />
       </mesh>
       <group

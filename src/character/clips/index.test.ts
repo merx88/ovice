@@ -1,8 +1,20 @@
-import { AnimationClip } from 'three'
+import { AnimationClip, Euler, Quaternion } from 'three'
 import { describe, expect, it } from 'vitest'
 import { BONE_NAMES, CLIP_NAMES, CLIPS, resolveClip, type ClipName, type Pose } from './index'
 import { HANDOFF_POS, SEAT_GROUND_POS } from '../../scene/layout'
-import { seatedBase, standingBase } from './shared'
+import {
+  ARM_ON_KEYS,
+  ARM_OVER_KEYS,
+  armFromKeys,
+  arms,
+  mixArm,
+  seatedBase,
+  seatedTucked,
+  standingBase,
+  tucking,
+  type ArmPose,
+  type Triple,
+} from './shared'
 import { WALK_SPEED } from './walk'
 
 const ALL_CLIPS: ClipName[] = [
@@ -133,4 +145,161 @@ describe('clip registry', () => {
       for (const t of [0, clip.duration as number]) expectSamePose(clip.sample(t), seatedBase, breathing)
     },
   )
+})
+
+// --- At the desk ------------------------------------------------------------------
+
+const LEFT_ARM = ['arm_L.001', 'arm_L.002', 'arm_L.003'] as const
+const RIGHT_ARM = ['arm_R.001', 'arm_R.002', 'arm_R.003'] as const
+
+/** The angle (radians) between two rotations given as a pose writes them. */
+function turnBetween(a: Triple | undefined, b: Triple | undefined): number {
+  const quaternion = (rot: Triple = [0, 0, 0]) => new Quaternion().setFromEuler(new Euler(rot[0], rot[1], rot[2]))
+  return quaternion(a).angleTo(quaternion(b))
+}
+
+/** How far (radians) the joints of one arm are from where `expected` has them, at the most. */
+function armOff(pose: Pose, bones: readonly string[], expected: Pose): number {
+  return Math.max(...bones.map((bone) => turnBetween(pose[bone]?.rot, expected[bone]?.rot)))
+}
+
+const onKeys = arms(ARM_ON_KEYS)
+/** Breathing turns the upper arms by about a hundredth of a radian. */
+const BREATH = 0.02
+/** Two rotations that are the same come out this close, give or take the arithmetic. */
+const STILL = 1e-6
+
+describe('waiting at the desk', () => {
+  it('rests both hands on the keys', () => {
+    expect(armOff(seatedBase, [...LEFT_ARM, ...RIGHT_ARM], onKeys)).toBeLessThan(STILL)
+    expect(armOff(CLIPS.idle.sample(0), [...LEFT_ARM, ...RIGHT_ARM], onKeys)).toBeLessThan(STILL)
+  })
+
+  it('keeps the hands on the keys while it breathes: the arms do not rock with the chest', () => {
+    for (let t = 0; t <= 3.6; t += 0.3) {
+      const pose = CLIPS.idle.sample(t)
+      const chest = (pose.body?.rot?.[0] ?? 0) - (seatedBase.body?.rot?.[0] ?? 0)
+      for (const upper of ['arm_L.001', 'arm_R.001']) {
+        expect((pose[upper]?.rot?.[0] ?? 0) - (seatedBase[upper]?.rot?.[0] ?? 0)).toBeCloseTo(-chest, 10)
+      }
+      expect(armOff(pose, ['arm_L.002', 'arm_L.003', 'arm_R.002', 'arm_R.003'], onKeys)).toBeLessThan(STILL)
+    }
+  })
+
+  it.each(['wave', 'sip', 'stretch', 'lookAround', 'tap', 'scratchHead', 'standUp', 'think'] as const)(
+    '%s starts with both hands on the keys',
+    (name) => {
+      const start = CLIPS[name].sample(0)
+      expect(armOff(start, ['arm_L.002', 'arm_L.003', 'arm_R.002', 'arm_R.003'], onKeys)).toBeLessThan(STILL)
+      expect(armOff(start, ['arm_L.001', 'arm_R.001'], onKeys)).toBeLessThan(STILL)
+    },
+  )
+
+  it.each(['wave', 'sip', 'stretch', 'lookAround', 'tap', 'scratchHead', 'sitDown'] as const)(
+    '%s ends with both hands on the keys',
+    (name) => {
+      const end = CLIPS[name].sample(CLIPS[name].duration as number)
+      expect(armOff(end, ['arm_L.002', 'arm_L.003', 'arm_R.002', 'arm_R.003'], onKeys)).toBeLessThan(STILL)
+      expect(armOff(end, ['arm_L.001', 'arm_R.001'], onKeys)).toBeLessThan(BREATH)
+    },
+  )
+
+  it('thinks with one hand raised from the keys and the other left on them', () => {
+    for (let t = 0; t <= 6; t += 0.25) {
+      expect(armOff(CLIPS.think.sample(t), ['arm_L.002', 'arm_L.003'], onKeys)).toBeLessThan(STILL)
+      expect(armOff(CLIPS.think.sample(t), ['arm_L.001'], onKeys)).toBeLessThan(BREATH)
+    }
+    expect(armOff(CLIPS.think.sample(2), RIGHT_ARM, onKeys)).toBeGreaterThan(0.5)
+  })
+
+  it('types with both hands at the keys, never further from them than a lifted finger', () => {
+    const lifted = arms(ARM_OVER_KEYS)
+    const reach = Math.max(...[...LEFT_ARM, ...RIGHT_ARM].map((bone) => turnBetween(onKeys[bone].rot, lifted[bone].rot)))
+    let highest = 0
+    for (let t = 0; t <= 6; t += 0.05) {
+      const pose = CLIPS.typing.sample(t)
+      for (const bone of [...LEFT_ARM, ...RIGHT_ARM]) {
+        const off = turnBetween(pose[bone]?.rot, onKeys[bone].rot)
+        expect(off).toBeLessThan(reach + BREATH)
+        highest = Math.max(highest, off)
+      }
+    }
+    // The hands do move.
+    expect(highest).toBeGreaterThan(reach / 2)
+  })
+
+  it('drums with the right hand beside the laptop while the left stays on the keys', () => {
+    let furthest = 0
+    for (let t = 0; t <= 2; t += 0.05) {
+      const pose = CLIPS.tap.sample(t)
+      expect(armOff(pose, ['arm_L.002', 'arm_L.003'], onKeys)).toBeLessThan(STILL)
+      expect(armOff(pose, ['arm_L.001'], onKeys)).toBeLessThan(BREATH)
+      furthest = Math.max(furthest, armOff(pose, RIGHT_ARM, onKeys))
+    }
+    expect(furthest).toBeGreaterThan(0.4)
+  })
+
+  it('looks around with the head alone, so that the hands stay where they are', () => {
+    for (let t = 0; t <= 3; t += 0.1) {
+      const pose = CLIPS.lookAround.sample(t)
+      expect(armOff(pose, ['arm_L.002', 'arm_L.003', 'arm_R.002', 'arm_R.003'], onKeys)).toBeLessThan(STILL)
+      expect(pose.body?.rot?.[1] ?? 0).toBe(0)
+      expect(pose.body?.rot?.[2] ?? 0).toBe(0)
+    }
+    expect(Math.abs(CLIPS.lookAround.sample(0.75).head?.rot?.[1] ?? 0)).toBeGreaterThan(0.4)
+  })
+})
+
+describe('mixArm', () => {
+  const raised: ArmPose = { upper: [1.2, 0.3, -0.4], fore: [0.2, 0.9, 0], hand: [0, 0.1, 0.3] }
+
+  it('gives back either end untouched', () => {
+    expect(mixArm(ARM_ON_KEYS, raised, 0)).toBe(ARM_ON_KEYS)
+    expect(mixArm(ARM_ON_KEYS, raised, 1)).toBe(raised)
+    expect(mixArm(ARM_ON_KEYS, raised, -0.2)).toBe(ARM_ON_KEYS)
+    expect(mixArm(ARM_ON_KEYS, raised, 1.2)).toBe(raised)
+  })
+
+  it('turns every joint the given share of the way', () => {
+    const half = mixArm(ARM_ON_KEYS, raised, 0.5)
+    for (const joint of ['upper', 'fore', 'hand'] as const) {
+      const whole = turnBetween(ARM_ON_KEYS[joint], raised[joint])
+      expect(turnBetween(ARM_ON_KEYS[joint], half[joint])).toBeCloseTo(whole / 2, 6)
+      expect(turnBetween(half[joint], raised[joint])).toBeCloseTo(whole / 2, 6)
+    }
+  })
+})
+
+describe('armFromKeys', () => {
+  const raised: ArmPose = { upper: [1.2, 0.3, -0.4], fore: [0.2, 0.9, 0], hand: [0, 0.1, 0.3] }
+
+  it('starts on the keys and ends in the gesture', () => {
+    expect(armFromKeys(raised, 0)).toEqual(ARM_ON_KEYS)
+    expect(armFromKeys(raised, 1)).toEqual(raised)
+  })
+
+  it('leaves the keys by lifting the hand, whatever the gesture', () => {
+    const other: ArmPose = { upper: [-0.5, 0.2, 1], fore: [0, -1.2, 0.3], hand: [0.3, 0, 0] }
+    // The first tenth of the way is the same for every gesture: the hand has only begun to lift.
+    for (const joint of ['upper', 'fore', 'hand'] as const) {
+      expect(turnBetween(armFromKeys(raised, 0.1)[joint], armFromKeys(other, 0.1)[joint])).toBeLessThan(STILL)
+    }
+    expect(turnBetween(armFromKeys(raised, 0.1).upper, ARM_ON_KEYS.upper)).toBeGreaterThan(0)
+  })
+
+  it('moves without a jump', () => {
+    let previous = armFromKeys(raised, 0)
+    for (let weight = 0.01; weight <= 1.0001; weight += 0.01) {
+      const next = armFromKeys(raised, Math.min(1, weight))
+      for (const joint of ['upper', 'fore', 'hand'] as const) expect(turnBetween(previous[joint], next[joint])).toBeLessThan(0.06)
+      previous = next
+    }
+  })
+})
+
+describe('tucking', () => {
+  it('goes from the seated pose to sitting up with the hands drawn back', () => {
+    expectSamePose(tucking(0), seatedBase)
+    expectSamePose(tucking(1), seatedTucked)
+  })
 })

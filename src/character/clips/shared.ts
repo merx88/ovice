@@ -208,39 +208,109 @@ export const SEAT_LIFT = SEAT_HEIGHT - HEM_HEIGHT
 /** Arms hanging by the sides, as far out as the wide body pushes them. */
 export const ARM_DOWN: ArmPose = { upper: [-0.22, -0.05, -0.83], fore: [0.17, 0.1, -0.45], hand: [-0.05, 0.02, 0.03] }
 
-/** A hand resting on the desk beside the laptop. */
+/**
+ * A hand resting on the desk beside the laptop, as the body sat before its
+ * hands went onto the keys. Only the clips that still sit up for their gesture
+ * use it.
+ */
 export const ARM_ON_DESK: ArmPose = { upper: [0.91, -0.76, 0.27], fore: [-0.11, -0.68, 0.06], hand: [-0.06, -0.02, 0.15] }
 
-/** A hand lifted off the desk and drawn back to the chest, clear of the desk's edge. */
+/**
+ * A hand resting on the laptop: the fingertips on the keys, the cuff on the
+ * laptop's near edge, and all of it inside the outline of the lid as the
+ * camera sees it, wherever the pointer has taken the camera.
+ */
+export const ARM_ON_KEYS: ArmPose = { upper: [0.69, -1.3, 0.2], fore: [0.24, -0.77, 0.3], hand: [0.05, -0.04, 0.13] }
+
+/** The same hand lifted a finger's breadth off the keys, still behind the lid. */
+export const ARM_OVER_KEYS: ArmPose = { upper: [0.56, -1.16, 0.08], fore: [0.38, -1, 0.51], hand: [0.05, 0.06, 0.13] }
+
+/** A hand lifted well clear of the laptop: the way a gesture leaves the keys and comes back to them. */
+const ARM_CLEAR_OF_KEYS: ArmPose = { upper: [0.61, -0.96, 0.03], fore: [1.05, -1.1, 1.38], hand: [0.06, 0.24, 0.02] }
+
+/** A hand lifted off the desk and drawn back to the chest, clear of the desk's edge; the body sits up for it. */
 const ARM_TUCKED: ArmPose = { upper: [0.56, 0.73, -0.37], fore: [-0.19, -2.06, -0.57], hand: [0.13, -0.16, 0.27] }
+
+/** One arm part of the way from one pose to another, each joint turning the short way round. */
+export function mixArm(from: ArmPose, to: ArmPose, weight: number): ArmPose {
+  if (weight <= 0) return from
+  if (weight >= 1) return to
+  return {
+    upper: mixRotations(from.upper, to.upper, weight),
+    fore: mixRotations(from.fore, to.fore, weight),
+    hand: mixRotations(from.hand, to.hand, weight),
+  }
+}
+
+/**
+ * An arm `weight` of the way from the keys to the pose `to` of a gesture. It
+ * lifts clear of the laptop first and only then goes on, so that the hand
+ * never sweeps through the laptop or the desk; the way back is the same in
+ * reverse.
+ */
+export function armFromKeys(to: ArmPose, weight: number): ArmPose {
+  const lifted = mixArm(ARM_ON_KEYS, ARM_CLEAR_OF_KEYS, ramp(weight, 0, 0.4))
+  return mixArm(lifted, to, ramp(weight, 0.12, 1))
+}
 
 /** Standing upright with the arms down. */
 export const standingBase: Pose = {
   ...arms(ARM_DOWN),
 }
 
-/** Sitting on the chair, leaning a little over the desk, with both hands beside the laptop and the feet dangling. */
+/**
+ * How far the seated body leans over the desk (radians). Its arms are short,
+ * 30 cm from shoulder to wrist: it has to lean this far for its hands to rest
+ * on the laptop.
+ */
+const SEAT_LEAN = 0.32
+
+/**
+ * Sitting on the chair, leaning over the desk with both hands on the laptop's
+ * keys, behind its lid, and the feet dangling. The head stays upright.
+ */
 export const seatedBase: Pose = {
   'root 1': { pos: [0, SEAT_LIFT, 0] },
-  body: { rot: [0.14, 0, 0] },
-  head: { rot: [-0.12, 0, 0] },
-  ...arms(ARM_ON_DESK),
+  body: { rot: [SEAT_LEAN, 0, 0] },
+  head: { rot: [0.02 - SEAT_LEAN, 0, 0] },
+  ...arms(ARM_ON_KEYS),
   ...legs({ thigh: [-0.5, 0, 0], foot: [0.4, 0, 0] }),
 }
 
 /**
- * Seated, with the hands drawn back off the desk: what getting up starts with
- * and sitting down ends with, so that the hands never sweep through the desk.
+ * Body and head of the seated character sitting up: as it leaned before its
+ * hands went onto the laptop. The gestures that were shaped for that lean sit
+ * up to it; their arms are their own.
  */
-export const seatedTucked: Pose = { ...seatedBase, ...arms(ARM_TUCKED) }
+export const sittingUp: Pose = {
+  body: { rot: [0.14, 0, 0] },
+  head: { rot: [-0.12, 0, 0] },
+}
 
-/** The slow rise and fall of breathing, added to whatever else the body does. */
+/**
+ * Seated, sitting up with the hands drawn back off the desk: what getting up
+ * starts with and sitting down ends with, so that the hands never sweep
+ * through the desk.
+ */
+export const seatedTucked: Pose = { ...seatedBase, ...sittingUp, ...arms(ARM_TUCKED) }
+
+/** The seated pose `weight` of the way to `seatedTucked`, the hands leaving the keys by lifting clear of the laptop. */
+export function tucking(weight: number): Pose {
+  return { ...mix(seatedBase, seatedTucked, weight), ...arms(armFromKeys(ARM_TUCKED, weight)) }
+}
+
+/**
+ * The slow rise and fall of breathing, added to whatever else the body does.
+ * The chest rocks; the arms do not rock with it, so that hands which rest on
+ * something stay on it.
+ */
 export function breathing(t: number): Pose {
   const breath = Math.sin((t * TAU) / 3.6)
+  const chest = 0.012 * breath
   return {
-    body: { rot: [0.012 * breath, 0, 0] },
+    body: { rot: [chest, 0, 0] },
     head: { rot: [-0.01 * breath, 0, 0] },
-    'arm_L.001': { rot: [0, 0, 0.015 * breath] },
-    'arm_R.001': { rot: [0, 0, -0.015 * breath] },
+    'arm_L.001': { rot: [-chest, 0, 0] },
+    'arm_R.001': { rot: [-chest, 0, 0] },
   }
 }

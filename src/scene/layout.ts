@@ -81,8 +81,12 @@ export const WALK_OUT_PATH: readonly Vec3[] = [
 /** The corners of the walk are rounded to arcs of this radius, so the character turns as it goes. */
 export const WALK_CORNER_RADIUS = 0.5
 
-/** Centre of the laptop's base, resting on the desktop in front of the seat. */
-export const LAPTOP_POS = [SEAT_X, DESK_TOP_Y, -0.16] as const
+/**
+ * Centre of the laptop's base, resting on the desktop in front of the seat: as
+ * near the seat as the desk's back edge allows, because the character's short
+ * arms have to reach its keys.
+ */
+export const LAPTOP_POS = [SEAT_X, DESK_TOP_Y, -0.21] as const
 
 // --- Furniture and props ----------------------------------------------------
 
