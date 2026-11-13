@@ -41,9 +41,9 @@
     0 calc(var(--u) * 1) calc(var(--u) * 2) color-mix(in srgb, var(--c-ui-black) 3%, transparent);
   color: var(--c-black);
   font-size: calc(var(--u) * 18.5);
-  font-weight: 500;
+  font-weight: 550;
   line-height: calc(var(--u) * 24);
-  letter-spacing: -0.035em;
+  letter-spacing: -0.038em;
   overflow-wrap: anywhere;
   animation: bubble-in 180ms ease-out;
 }

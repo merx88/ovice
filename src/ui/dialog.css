@@ -53,39 +53,41 @@
 
 .dialog__head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   flex: none;
   gap: 12px;
   padding: 24px 24px 16px 32px;
 }
 
-.dialog__heading {
+/* The viewer's head: the badge and the buttons in one row, the title below them across the whole width. */
+.dialog__head--doc {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px 12px;
+}
+
+.dialog__head--doc .dialog__title {
+  grid-column: 1 / -1;
+}
+
+.dialog__actions {
   display: flex;
-  flex: 1;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 10px;
-  min-width: 0;
+  gap: 8px;
 }
 
 .dialog__title {
   flex: 1;
   min-width: 0;
   margin: 0;
-  padding-top: 6px;
   font-size: 22px;
   font-weight: 700;
   line-height: 1.35;
   overflow-wrap: anywhere;
 }
 
-.dialog__heading .dialog__title {
-  flex: none;
-  padding-top: 0;
-}
-
 /* Marks a result as a sample. */
 .badge {
+  justify-self: start;
   padding: 4px 12px;
   border-radius: 14px;
   background: var(--c-ui-orange);
@@ -93,6 +95,7 @@
   font-size: 13px;
   font-weight: 700;
   line-height: 20px;
+  white-space: nowrap;
 }
 
 .dialog__action,

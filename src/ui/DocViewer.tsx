@@ -24,20 +24,21 @@ function Viewer({ result, onClose }: { result: Result; onClose(): void }) {
   return (
     <div className="modal" data-modal="" {...backdrop}>
       <div ref={dialog} className="dialog dialog--doc" role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>
-        <header className="dialog__head">
-          <div className="dialog__heading">
-            <span className="badge">예시 결과물</span>
-            <h2 id={titleId} className="dialog__title">
-              {result.title}
-            </h2>
+        {/* The badge and the buttons share the first row; the title has the second one to itself. */}
+        <header className="dialog__head dialog__head--doc">
+          <span className="badge">예시 결과물</span>
+          <div className="dialog__actions">
+            <button type="button" className="dialog__action" onClick={() => downloadMarkdown(result.title, result.markdown)}>
+              <Icon name="download" size={20} />
+              .md 다운로드
+            </button>
+            <button type="button" className="dialog__close" aria-label="닫기" onClick={onClose}>
+              <Icon name="close" size={20} />
+            </button>
           </div>
-          <button type="button" className="dialog__action" onClick={() => downloadMarkdown(result.title, result.markdown)}>
-            <Icon name="download" size={20} />
-            .md 다운로드
-          </button>
-          <button type="button" className="dialog__close" aria-label="닫기" onClick={onClose}>
-            <Icon name="close" size={20} />
-          </button>
+          <h2 id={titleId} className="dialog__title">
+            {result.title}
+          </h2>
         </header>
         {/* A stop for the keyboard, so that a long document can be scrolled without a mouse. */}
         <div className="doc" role="region" aria-label="문서 내용" tabIndex={0}>

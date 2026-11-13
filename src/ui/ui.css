@@ -51,6 +51,8 @@
   font-size: calc(var(--u) * 19);
   font-weight: 500;
   line-height: 1.3;
+  /* Korean breaks between words, not inside them. */
+  word-break: keep-all;
   -webkit-tap-highlight-color: transparent;
 }
 

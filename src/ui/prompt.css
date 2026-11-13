@@ -149,6 +149,11 @@
   --focus: var(--c-ui-black);
 }
 
+/* The pill takes the focus when it replaces the prompt panel, as a place to go on from; it is not a control. */
+.pill:focus-visible {
+  outline: 0;
+}
+
 .pill--progress {
   background: var(--c-ui-orange);
 }
@@ -181,7 +186,8 @@
   padding-top: calc(var(--u) * 2);
   overflow: hidden;
   font-size: calc(var(--u) * 19);
-  letter-spacing: -0.023em;
+  font-weight: 550;
+  letter-spacing: -0.026em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -288,7 +294,13 @@
     margin-right: 12px;
   }
 
-  /* The retry pill says what happened; the prompt itself is in the tasks panel. */
+  /* The retry pill says what happened, on two lines if it has to; the prompt itself is in the tasks panel. */
+  .pill--failed .pill__text {
+    padding: 4px 0;
+    line-height: 1.25;
+    white-space: normal;
+  }
+
   .pill--failed .pill__lead {
     margin-right: 0;
   }

@@ -282,12 +282,14 @@
   }
 
   .panel {
+    /* Never so tall that the dock on top of it would reach the bar along the top of the screen. */
+    --sheet: min(70vh, 100vh - 216px);
     position: static;
     width: 100%;
-    max-height: 70vh;
-    max-height: 70dvh;
+    max-height: var(--sheet);
     padding: 16px max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom))
       max(16px, env(safe-area-inset-left));
+    overflow-y: auto;
     border-radius: 28px 28px 0 0;
   }
 
@@ -296,14 +298,18 @@
     min-height: 220px;
   }
 
-  .tiles {
-    align-self: center;
-    width: min(100%, 420px);
-  }
-
+  /* The tiles form a square: as wide as the screen allows, and no taller than the sheet has room for. */
+  .tiles,
   .search {
     align-self: center;
-    width: min(100%, 420px);
+    width: min(100%, 420px, var(--sheet) - 100px - env(safe-area-inset-bottom));
+  }
+
+  /* Measured against the part of the screen the browser's own bars leave free, where that can be asked for. */
+  @supports (height: 100dvh) {
+    .panel {
+      --sheet: min(70dvh, 100dvh - 216px);
+    }
   }
 
   /* The sheet takes the place of the prompt bar for as long as it is open. */
