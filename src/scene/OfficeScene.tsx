@@ -4,6 +4,7 @@ import { Color } from 'three'
 import { Character } from '../character/Character'
 import { useCharacterDriver } from '../character/useCharacterDriver'
 import { tokens } from '../theme/tokens'
+import { SpeechBubble } from '../ui/SpeechBubble'
 import { CameraRig } from './CameraRig'
 import { gradientStrip } from './geometry'
 import { Bookshelf } from './furniture/Bookshelf'
@@ -117,6 +118,7 @@ export function OfficeScene() {
       <Suspense fallback={null}>
         <Resident />
       </Suspense>
+      <SpeechBubble />
     </>
   )
 }

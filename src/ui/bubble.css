@@ -1,0 +1,64 @@
+/*
+ * The speech bubbles beside the character's head. They are drawn inside the
+ * canvas' own HTML layer (see SpeechBubble.tsx), at the point the element
+ * `.bubbles` is moved to on every frame: the first bubble's left edge starts
+ * there, with the bubble's middle at that height. Sizes are the reference's
+ * (1728 px wide), in design units (`--u`, see ui.css).
+ */
+
+.bubbles {
+  /* The folder's button lies under the bubbles and has to stay clickable. */
+  pointer-events: none;
+  /* How far the bubbles may reach to the right; set from SpeechBubble.tsx as the character moves. */
+  --room: 100vw;
+  /* Each further bubble starts this much further right, as in the reference — less where room is short. */
+  --stagger: clamp(0px, calc(var(--room) - var(--u) * 300), calc(var(--u) * 110));
+}
+
+.bubbles__said {
+  position: absolute;
+  top: calc(var(--u) * -30);
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: calc(var(--u) * 5);
+  width: max-content;
+  max-width: var(--room);
+}
+
+.bubble {
+  box-sizing: border-box;
+  max-width: calc(var(--u) * 440);
+  min-height: calc(var(--u) * 60);
+  margin: 0;
+  padding: calc(var(--u) * 18) calc(var(--u) * 20);
+  border-radius: calc(var(--u) * 30);
+  /* A soft, barely raised pill: a shade darker than the wall at its top, a shade lighter at its bottom. */
+  background: linear-gradient(to bottom, var(--c-bubble-top), var(--c-bubble-bottom));
+  box-shadow:
+    0 calc(var(--u) * 5) calc(var(--u) * 12) color-mix(in srgb, var(--c-ui-black) 4%, transparent),
+    0 calc(var(--u) * 1) calc(var(--u) * 2) color-mix(in srgb, var(--c-ui-black) 3%, transparent);
+  color: var(--c-black);
+  font-size: calc(var(--u) * 18.5);
+  font-weight: 500;
+  line-height: calc(var(--u) * 24);
+  letter-spacing: -0.035em;
+  overflow-wrap: anywhere;
+  animation: bubble-in 180ms ease-out;
+}
+
+.bubble:nth-child(2) {
+  margin-left: var(--stagger);
+}
+
+.bubble:nth-child(n + 3) {
+  margin-left: calc(var(--stagger) * 2);
+}
+
+@keyframes bubble-in {
+  from {
+    opacity: 0;
+    transform: translateY(calc(var(--u) * 6));
+  }
+}
