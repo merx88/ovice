@@ -5,8 +5,8 @@
 // `waitMs` is how long to let the scene run after the canvas appears before
 // the picture is taken (default 2500): raise it to catch an animation midway.
 //
-// Uses the Playwright that is already installed on the machine (it is not a
-// project dependency), found through NODE_PATH.
+// Uses the Playwright the end-to-end tests run with (`@playwright/test` brings
+// it along) and the Chromium it finds for itself.
 import { createRequire } from 'node:module'
 
 const [url, out, width = '1728', height = '1117', scale = '1', waitMs = '2500'] = process.argv.slice(2)
