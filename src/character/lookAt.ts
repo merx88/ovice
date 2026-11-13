@@ -47,7 +47,7 @@ export function lookAngles(eye: Vec3, facing: number, target: Vec3): { yaw: numb
  * of the view one metre from the camera.
  */
 export function lookPlaneDistance(cameraDistance: number, viewHalfWidth: number, edgeYaw: number): number {
-  // At the plane the view is as wide as the camera is far from it; that width has to be the plane's distance times tan(edgeYaw).
+  // Half the view's width at the plane, (cameraDistance - d) * viewHalfWidth, has to be d * tan(edgeYaw) for the plane's distance d.
   return (cameraDistance * viewHalfWidth) / (Math.tan(edgeYaw) + viewHalfWidth)
 }
 

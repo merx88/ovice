@@ -25,7 +25,7 @@ import { SEAT_LIFT } from './clips/shared'
 import { WALK_SPEED } from './clips/walk'
 import { LOOK_EDGE_YAW } from './constants'
 import { damp, lookPlaneDistance } from './lookAt'
-import { measurePath, roundCorners, samplePath, stepWalker, type PathSample, type Walker } from './path'
+import { measurePath, roundCorners, samplePath, stepWalker, turnBetween, type PathSample, type Walker } from './path'
 import { MAX_STEP } from './playback'
 import { initialMachine, transition, type CharEvent, type CharMachine } from './stateMachine'
 import type { BadgeStatus } from './StatusBadge'
@@ -35,6 +35,11 @@ import { NO_TASKS, runningTask, taskEvents, type TasksSnapshot } from './taskEve
 const ROUTE = measurePath(roundCorners(WALK_OUT_PATH, WALK_CORNER_RADIUS))
 /** How fast the character is moved along it (m/s); its walk clip is sped up to match. */
 const WALK_GROUND_SPEED = WALK_SPEED * WALK_PACE
+/**
+ * Back at its chair the character sits down once it faces the desk to within
+ * this (radians): its hands come down where the desk is, so it turns first.
+ */
+const FACES_DESK_WITHIN = 0.1
 /** How quickly the bubble's anchor follows the body up and down as it stands up or sits down (1/s). */
 const ANCHOR_RATE = 5
 
@@ -265,6 +270,7 @@ export function useCharacterDriver(): CharacterProps {
       arrived &&
       driver.machine.state === 'returning' &&
       !driver.backAtSeat &&
+      Math.abs(turnBetween(walker.facing, SEAT_FACING)) <= FACES_DESK_WITHIN &&
       // If the character sat down a moment ago and has not been shown anything else
       // since, it would not play sitting down again: wait for the render in between.
       renderedClip.current !== clipAwaitedBy('returning', null)
