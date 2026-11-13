@@ -30,14 +30,15 @@
   min-height: calc(var(--u) * 48);
   max-height: calc(var(--u) * 144);
   margin: 0;
-  padding: calc(var(--u) * 12) calc(var(--u) * 17);
+  /* The reference sets the line a little below the field's middle. */
+  padding: calc(var(--u) * 14) calc(var(--u) * 17) calc(var(--u) * 10);
   border: 0;
   border-radius: calc(var(--u) * 24);
   outline: 0;
   background: var(--c-ui-field);
   color: var(--c-white);
   font: inherit;
-  font-size: calc(var(--u) * 19);
+  font-size: calc(var(--u) * 18);
   line-height: calc(var(--u) * 24);
   resize: none;
   overflow-y: auto;
@@ -94,9 +95,9 @@
     color-mix(in srgb, var(--c-ui-grey) 88%, var(--c-white))
   );
   color: var(--c-white);
-  font-size: calc(var(--u) * 19);
+  font-size: calc(var(--u) * 17.5);
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
   transition: filter 120ms ease;
 }
 
@@ -185,9 +186,9 @@
   /* The reference sets the line a little below the pill's middle. */
   padding-top: calc(var(--u) * 2);
   overflow: hidden;
-  font-size: calc(var(--u) * 19);
-  font-weight: 550;
-  letter-spacing: -0.026em;
+  font-size: calc(var(--u) * 18.25);
+  font-weight: 500;
+  letter-spacing: -0.02em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

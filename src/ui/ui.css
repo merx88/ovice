@@ -149,10 +149,9 @@
   min-height: var(--tap);
   border-radius: calc(var(--u) * 28);
   color: var(--c-black);
-  padding-top: calc(var(--u) * 1);
-  font-size: calc(var(--u) * 22);
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  padding-top: calc(var(--u) * 3);
+  font-size: calc(var(--u) * 22.5);
+  font-weight: 600;
   transition: background-color 120ms ease;
 }
 
@@ -195,8 +194,7 @@
 
 .office {
   padding: 0 calc(var(--u) * 18) 0 calc(var(--u) * 4);
-  font-size: calc(var(--u) * 19.5);
-  letter-spacing: -0.03em;
+  font-size: calc(var(--u) * 18.05);
   white-space: nowrap;
 }
 
@@ -348,6 +346,5 @@
 @media (max-width: 359px) {
   .tab {
     font-size: 14px;
-    letter-spacing: 0;
   }
 }

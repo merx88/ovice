@@ -117,8 +117,8 @@
   border-radius: calc(var(--u) * 28);
   background: var(--c-ui-silver);
   color: var(--c-ui-black);
-  font-size: calc(var(--u) * 21);
-  letter-spacing: -0.025em;
+  font-size: calc(var(--u) * 18.7);
+  font-weight: 600;
   text-align: left;
   transition: background-color 120ms ease;
 }
@@ -138,6 +138,11 @@
   margin-right: calc(var(--u) * 17);
   border-radius: 50%;
   background: var(--c-white);
+}
+
+/* The label; the reference sets it a little below the pill's middle. */
+.search__disc + span {
+  padding-top: calc(var(--u) * 3);
 }
 
 /* --- The tasks ---------------------------------------------------------------------- */
