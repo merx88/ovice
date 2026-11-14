@@ -1,6 +1,9 @@
 // The one check of the layout: on a phone held upright nothing is wider than
 // the screen. (How the interface looks at every size is not an end-to-end
 // matter; this only makes sure that the page cannot be pushed sideways.)
+// The widths are measured in the browser's fallback fonts: the fixture
+// answers the font hosts with nothing (`answerFontHosts` in `fixtures.ts`),
+// so Poppins and Pretendard, the fonts visitors see, never arrive here.
 import type { Page } from '@playwright/test'
 import { bubbles, characterAppeared, expect, openTasks, progressPill, promptField, send, test } from './fixtures'
 
