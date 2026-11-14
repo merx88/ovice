@@ -119,7 +119,10 @@ test.describe('in a browser without WebGL', () => {
     })
     await page.goto('/?fast=1')
 
-    await expect(page.getByRole('alert')).toHaveText('3D 화면을 불러오지 못했어요')
+    // Two lines: what is wrong, and where the results are without the character to hand them over.
+    await expect(page.getByRole('alert')).toHaveText("3D 화면을 불러오지 못했어요 결과는 오른쪽 아래 '작업 목록' 버튼을 눌러 열 수 있어요.", {
+      useInnerText: true,
+    })
     await expect(page.locator('canvas')).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'Office', exact: true })).toHaveAttribute('aria-current', 'page')
 

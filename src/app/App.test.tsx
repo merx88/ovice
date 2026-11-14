@@ -128,6 +128,14 @@ describe('App', () => {
     expect(screen.queryByTestId('canvas')).not.toBeInTheDocument()
   })
 
+  it('says where the results are without the character, naming the button by what it is announced as', () => {
+    stubWebGL(false)
+    render(<App />)
+    const button = screen.getByRole('button', { name: '작업 목록' })
+    expect(button).toHaveAccessibleName('작업 목록')
+    expect(screen.getByRole('alert')).toHaveTextContent("결과는 오른쪽 아래 '작업 목록' 버튼을 눌러 열 수 있어요.")
+  })
+
   it('shows the notice when the scene fails', () => {
     stubWebGL(true)
     vi.spyOn(console, 'error').mockImplementation(() => {})
