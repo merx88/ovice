@@ -6,7 +6,7 @@
  * hide or reorder text (zero-width marks, direction overrides).
  */
 const REFUSED = /[\u0000-\u001f\u007f-\u009f\\/:*?"<>|]/g
-const INVISIBLE = /[​-‏‪-‮⁠-⁩﻿]/g
+const INVISIBLE = /[\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/g
 const MAX_LENGTH = 80
 const FALLBACK = 'report'
 
