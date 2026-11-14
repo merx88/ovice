@@ -135,6 +135,24 @@ describe('DocViewer: the document', () => {
     }
   })
 
+  it('fetches no images: a picture in the document stands as a link to it, named by its description', () => {
+    const { baseElement } = view('title', 'A chart: ![x](https://example.com/a.png)\n\nAnd one undescribed: ![](https://example.com/b.png)')
+    expect(baseElement.querySelector('img')).toBeNull()
+    const described = screen.getByRole('link', { name: 'x' })
+    expect(described).toHaveAttribute('href', 'https://example.com/a.png')
+    expect(described).toHaveAttribute('target', '_blank')
+    expect(described).toHaveAttribute('rel', 'noopener noreferrer')
+    // Without a description the link is named by the address.
+    expect(screen.getByRole('link', { name: 'https://example.com/b.png' })).toHaveAttribute('href', 'https://example.com/b.png')
+  })
+
+  it('leaves only the description of a picture whose address would run script', () => {
+    const { baseElement } = view('title', 'Look: ![a chart](javascript:alert(1))')
+    expect(baseElement.querySelector('img')).toBeNull()
+    expect(screen.queryByRole('link')).not.toBeInTheDocument()
+    expect(screen.getByRole('region', { name: '문서 내용' })).toHaveTextContent('Look: a chart')
+  })
+
   it('drops links that would run script', () => {
     view('title', '[click me](javascript:alert(1)) and [data](data:text/html,<script>alert(1)</script>)')
     for (const link of screen.queryAllByRole('link')) {

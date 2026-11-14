@@ -230,11 +230,6 @@
   background: none;
 }
 
-.doc img {
-  max-width: 100%;
-  height: auto;
-}
-
 .doc hr {
   margin: 24px 0;
   border: 0;

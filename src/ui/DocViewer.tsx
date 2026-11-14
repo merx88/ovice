@@ -9,11 +9,22 @@ import './dialog.css'
 type Result = NonNullable<Task['result']>
 
 /**
- * How the document's elements are drawn. Only links differ from the default:
- * they open in a new tab, and that tab learns nothing about this page.
+ * How the document's elements are drawn. Links open in a new tab, and that
+ * tab learns nothing about this page. Pictures are not fetched: a result may
+ * point at any address, and opening the document would call it. A link to the
+ * picture stands in its place, named by its description (or by its address);
+ * where the address was dropped as unsafe, the description alone remains.
  */
 const COMPONENTS: Components = {
   a: ({ node: _node, ...props }) => <a {...props} target="_blank" rel="noopener noreferrer" />,
+  img: ({ src, alt }) =>
+    src ? (
+      <a href={src} target="_blank" rel="noopener noreferrer">
+        {alt || src}
+      </a>
+    ) : (
+      <>{alt}</>
+    ),
 }
 
 function Viewer({ result, onClose }: { result: Result; onClose(): void }) {
