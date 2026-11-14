@@ -22,7 +22,7 @@ npm run dev    # 개발 서버 실행
 ## 테스트
 
 ```bash
-npm test       # 단위 테스트 (약 20초)
+npm test       # 단위 테스트 (약 30초)
 npm run e2e    # 실제 브라우저로 전체 흐름 확인 (약 8분)
 ```
 
@@ -52,7 +52,7 @@ npm run e2e    # 실제 브라우저로 전체 흐름 확인 (약 8분)
 진짜 에이전트를 붙일 자리는 `src/agent/RealRunner.ts`입니다.
 이 파일이 `src/agent/types.ts`에 정해 둔 약속(단계가 바뀔 때마다 알리고, 끝나면 결과 문서를 넘긴다)대로 동작하게 만들고,
 `src/store/settings.ts`의 `AVAILABLE_MODES`에 `'real'`을 더하면 설정에서 "실제" 모드를 고를 수 있게 됩니다.
-캐릭터와 화면은 손댈 필요가 없습니다. AI 서비스의 API 키는 브라우저 코드에 넣지 말고 Vercel 서버 함수(`api/` 폴더)의 환경 변수로 보관하세요.
+캐릭터는 손댈 필요가 없고, 화면에서는 고정된 문구 두 개만 바꾸면 됩니다: 결과 문서의 "예시 결과물" 배지(`src/ui/DocViewer.tsx`)와 설정의 "실제 (준비 중)" 이름(`src/ui/SettingsDialog.tsx`). AI 서비스의 API 키는 브라우저 코드에 넣지 말고 Vercel 서버 함수(`api/` 폴더)의 환경 변수로 보관하세요.
 
 ## 빨리 보기: `?fast=1`
 
@@ -61,4 +61,4 @@ npm run e2e    # 실제 브라우저로 전체 흐름 확인 (약 8분)
 
 ## 더 알고 싶다면
 
-설계 문서: [`docs/superpowers/specs/2026-11-12-ovice-agent-office-design.md`](docs/superpowers/specs/2026-11-12-ovice-agent-office-design.md)
+설계 문서: 처음 설계 [`docs/superpowers/specs/2026-11-12-ovice-agent-office-design.md`](docs/superpowers/specs/2026-11-12-ovice-agent-office-design.md)와 2차 수정 설계 [`docs/superpowers/specs/2026-11-13-ovice-round-2-design.md`](docs/superpowers/specs/2026-11-13-ovice-round-2-design.md). 둘이 다른 곳(주황색 폴더, 머리 위 표시, 소파 등)은 2차 설계를 따릅니다.
