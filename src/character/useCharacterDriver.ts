@@ -145,7 +145,10 @@ interface Driver {
   chatAt: number
   /** The tasks as they were when the driver last looked; null until it has looked once. */
   seen: TasksSnapshot | null
-  /** The task whose result is being handed over: what the folder opens. */
+  /**
+   * The task whose result is being handed over: what the folder opens, and
+   * the one result whose viewer, once closed, ends the hand-over.
+   */
   handoverTaskId: string | null
   /** When a task was last cancelled (ms), until the line about it has been said or another task starts. */
   cancelledAt: number | null
@@ -402,6 +405,8 @@ export function useCharacterDriver(): CharacterProps {
       for (const event of events) {
         if (event.type === 'taskStarted') driver.cancelledAt = null
         if (event.type === 'taskCancelled') driver.cancelledAt = now
+        // Only the viewer of the result being handed over ends the hand-over: any other result is read in passing.
+        if (event.type === 'viewerClosed' && event.taskId !== driver.handoverTaskId) continue
         const taken = dispatch(event, now)
         if (taken && event.type === 'taskDone') driver.handoverTaskId = event.taskId
       }

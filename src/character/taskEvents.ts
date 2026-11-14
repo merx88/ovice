@@ -1,7 +1,7 @@
 // What a change of the tasks store means to the character: which task it
 // should start working on, how the task it was working on ended, and when the
-// result viewer was closed. And what the store means to a character that sees
-// it for the first time.
+// result viewer was closed on which result. And what the store means to a
+// character that sees it for the first time.
 import type { Task, TasksState } from '../store/tasks'
 
 /** The part of the tasks store the character reacts to. */
@@ -10,7 +10,8 @@ export type TasksSnapshot = Pick<TasksState, 'tasks' | 'activeId' | 'viewingId'>
 /** An event for the character's state machine, with the task it is about. */
 export type TaskEvent =
   | { type: 'taskStarted' | 'taskDone' | 'taskCancelled' | 'taskFailed'; taskId: string }
-  | { type: 'viewerClosed' }
+  /** The result viewer was closed; `taskId` is the task whose result it was showing. */
+  | { type: 'viewerClosed'; taskId: string }
 
 /** The store before anything is known about it: what to compare the first snapshot with. */
 export const NO_TASKS: TasksSnapshot = { tasks: [], activeId: null, viewingId: null }
@@ -27,7 +28,8 @@ const ENDINGS = { done: 'taskDone', cancelled: 'taskCancelled', failed: 'taskFai
 /**
  * The events that take the character from `previous` to `next`, in the order
  * they happened: first how the task that was running ended, then the task
- * that is running now if it is another one, then the viewer closing.
+ * that is running now if it is another one, then the viewer closing on the
+ * result it was showing.
  *
  * Only the task that was running in `previous` is followed, so each task is
  * reported as started once and as ended once, and tasks that were already
@@ -48,7 +50,9 @@ export function taskEvents(previous: TasksSnapshot, next: TasksSnapshot): TaskEv
   const running = runningTask(next)
   if (running && running.id !== followed?.id) events.push({ type: 'taskStarted', taskId: running.id })
 
-  if (previous.viewingId !== null && next.viewingId === null) events.push({ type: 'viewerClosed' })
+  if (previous.viewingId !== null && next.viewingId === null) {
+    events.push({ type: 'viewerClosed', taskId: previous.viewingId })
+  }
 
   return events
 }

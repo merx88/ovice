@@ -30,6 +30,10 @@ export type CharEvent =
   | { type: 'taskFailed' }
   | { type: 'clipFinished' }
   | { type: 'fileOpened' }
+  /**
+   * The viewer was closed on the result the character is bringing out: it has
+   * been read. Whoever drives the machine tells it of no other result's viewer.
+   */
   | { type: 'viewerClosed' }
   /** The chat is being used: its field was focused or pressed, or its text changed. */
   | { type: 'chatActivity' }
@@ -261,6 +265,9 @@ export function transition(
       switch (e.type) {
         case 'taskStarted':
           return enter(m, 'returning', now, { queued: 'work' })
+        case 'viewerClosed':
+          // Read from the tasks panel before it could be handed over: nothing is left to bring.
+          return enter(m, 'returning', now)
         case 'clipFinished':
           return enter(m, 'walkingOut', now)
         default:
@@ -271,6 +278,8 @@ export function transition(
       switch (e.type) {
         case 'taskStarted':
           return enter(m, 'returning', now, { queued: 'work' })
+        case 'viewerClosed':
+          return enter(m, 'returning', now)
         case 'clipFinished':
           return enter(m, 'handingFile', now)
         default:

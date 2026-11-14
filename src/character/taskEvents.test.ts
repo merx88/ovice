@@ -127,8 +127,9 @@ describe('taskEvents', () => {
   describe('the viewer', () => {
     const tasks = [task('b', 'done'), task('a', 'done')]
 
-    it('reports the viewer closing', () => {
-      expect(taskEvents(snapshot(tasks, null, 'a'), snapshot(tasks))).toEqual([{ type: 'viewerClosed' }])
+    it('reports the viewer closing, with the result it was showing', () => {
+      expect(taskEvents(snapshot(tasks, null, 'a'), snapshot(tasks))).toEqual([{ type: 'viewerClosed', taskId: 'a' }])
+      expect(taskEvents(snapshot(tasks, null, 'b'), snapshot(tasks))).toEqual([{ type: 'viewerClosed', taskId: 'b' }])
     })
 
     it('reports nothing when the viewer opens or shows another result', () => {
@@ -142,7 +143,7 @@ describe('taskEvents', () => {
       expect(taskEvents(before, after)).toEqual([
         { type: 'taskFailed', taskId: 'b' },
         { type: 'taskStarted', taskId: 'c' },
-        { type: 'viewerClosed' },
+        { type: 'viewerClosed', taskId: 'a' },
       ])
     })
   })
@@ -173,7 +174,7 @@ describe('taskEvents', () => {
       expect(seen).toEqual([
         { type: 'taskStarted', taskId: created.id },
         { type: 'taskDone', taskId: created.id },
-        { type: 'viewerClosed' },
+        { type: 'viewerClosed', taskId: created.id },
       ])
     })
 
@@ -316,7 +317,7 @@ describe('taskEventsAtFirstSight', () => {
       store.getState().setViewing(created.id)
       store.getState().setViewing(null)
 
-      expect(seen).toEqual([...handOver(created.id), { type: 'viewerClosed' }])
+      expect(seen).toEqual([...handOver(created.id), { type: 'viewerClosed', taskId: created.id }])
     })
 
     it('stays silent after a reload about a result that an earlier page load produced', () => {

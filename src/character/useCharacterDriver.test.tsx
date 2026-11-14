@@ -996,6 +996,102 @@ describe('useCharacterDriver', () => {
     })
   })
 
+  describe('a result read from the tasks panel while one is being brought out', () => {
+    /** A result of an earlier visit, in the tasks panel before the character appears. */
+    const OLDER: Task = {
+      id: 'older',
+      prompt: 'An earlier question',
+      status: 'done',
+      step: 'writing',
+      message: null,
+      result: RESULT,
+      error: null,
+      createdAt: 0,
+      finishedAt: 1,
+    }
+    const RESTING = { bubble: [], badge: 'idle', charState: 'resting' }
+
+    /** The visitor opens a result from the tasks panel. */
+    const openFromPanel = (id: string) => act(() => useTasks.getState().setViewing(id))
+    const closeViewer = () => act(() => useTasks.getState().setViewing(null))
+
+    it('is nothing to the character when it is another one: it goes on holding out the file it brings', () => {
+      act(() => useTasks.setState({ tasks: [OLDER], activeId: null, viewingId: null }))
+      const stage = mount()
+      const task = startTask()
+      stage.run(0.5)
+      // An older result is read while the task runs; the new one is brought out behind it meanwhile.
+      openFromPanel(OLDER.id)
+      finish(task.id)
+      stage.untilState('handingFile')
+      stage.run(1)
+      closeViewer()
+      stage.run(5)
+      expect(signals()).toEqual({ bubble: [MESSAGES.done[1]], badge: 'done', charState: 'handingFile' })
+      expect(stage.props()).toMatchObject({ clip: 'holdFile', holdingFile: true })
+
+      // Opened and closed while the character stands there, it is nothing to it either...
+      openFromPanel(OLDER.id)
+      closeViewer()
+      stage.run(1)
+      expect(signals().charState).toBe('handingFile')
+      expect(stage.props().holdingFile).toBe(true)
+      // ...and the folder still opens the result it brings.
+      act(() => stage.props().onFolderClick())
+      expect(useTasks.getState().viewingId).toBe(task.id)
+    })
+
+    it.each(['standingUp', 'walkingOut'] as const)(
+      'sends the character back to its seat when it is the one being brought out, read while the character is %s',
+      (state) => {
+        const stage = mount()
+        const task = startTask()
+        finish(task.id)
+        stage.untilState(state)
+        stage.run(0.3)
+        expect(signals().charState).toBe(state)
+
+        openFromPanel(task.id)
+        closeViewer()
+        expect(signals()).toEqual({ bubble: [], badge: 'idle', charState: 'returning' })
+
+        // Back at its chair without ever holding out the folder, it sits down and rests there.
+        const clips = new Set<string>()
+        stage.until(() => {
+          clips.add(stage.props().clip)
+          expect(stage.props().holdingFile).toBe(false)
+          return signals().charState === 'resting'
+        })
+        expect(clips).toContain('sitDown')
+        expect(clips).not.toContain('holdFile')
+        expect(stage.props()).toMatchObject({
+          clip: 'idle',
+          holdingFile: false,
+          placement: { position: [...SEAT_GROUND_POS], facing: SEAT_FACING },
+        })
+        stage.run(3)
+        expect(signals()).toEqual(RESTING)
+      },
+    )
+
+    it('ends the hand-over as the folder does when it is the one held out', () => {
+      const stage = mount()
+      const task = startTask()
+      finish(task.id)
+      stage.untilState('handingFile')
+      openFromPanel(task.id)
+      stage.run(1)
+      expect(signals().charState).toBe('handingFile')
+
+      closeViewer()
+      expect(signals()).toEqual({ bubble: [], badge: 'idle', charState: 'returning' })
+      stage.untilState('resting')
+      expect(stage.props()).toMatchObject({ clip: 'idle', holdingFile: false })
+      stage.run(3)
+      expect(signals()).toEqual(RESTING)
+    })
+  })
+
   describe('the end of a clip', () => {
     const late = (stage: ReturnType<typeof mount>, clip: ClipName) => act(() => stage.props().onClipFinished(clip))
 

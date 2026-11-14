@@ -392,14 +392,27 @@ describe('handing over the result', () => {
     expect(next.queued).toBeNull()
   })
 
+  it.each(['standingUp', 'walkingOut'] as const)(
+    '%s + viewerClosed → returning with nothing queued: the result was read before it arrived',
+    (state) => {
+      const next = transition(machineIn(state), { type: 'viewerClosed' }, T0 + 1)
+      expect(next.state).toBe('returning')
+      expect(next.queued).toBeNull()
+      expect(next.enteredAt).toBe(T0 + 1)
+    },
+  )
+
   it('returning + clipFinished → resting when nothing is queued', () => {
     expect(transition(machineIn('returning'), { type: 'clipFinished' }, T0 + 1).state).toBe('resting')
   })
 
-  it.each(STATES.filter((s) => s !== 'handingFile'))('viewerClosed is ignored in %s', (state) => {
-    const m = machineIn(state)
-    expect(transition(m, { type: 'viewerClosed' }, T0 + 1)).toBe(m)
-  })
+  it.each(STATES.filter((s) => s !== 'standingUp' && s !== 'walkingOut' && s !== 'handingFile'))(
+    'viewerClosed is ignored in %s',
+    (state) => {
+      const m = machineIn(state)
+      expect(transition(m, { type: 'viewerClosed' }, T0 + 1)).toBe(m)
+    },
+  )
 
   it('walks the whole happy path from a prompt to sitting down again', () => {
     const visited: CharState[] = []
@@ -894,8 +907,18 @@ describe('every state and event pair', () => {
       taskCancelled: 'resting',
       taskFailed: 'error',
     },
-    standingUp: { pointerMove: 'standingUp', taskStarted: 'returning', clipFinished: 'walkingOut' },
-    walkingOut: { pointerMove: 'walkingOut', taskStarted: 'returning', clipFinished: 'handingFile' },
+    standingUp: {
+      pointerMove: 'standingUp',
+      taskStarted: 'returning',
+      clipFinished: 'walkingOut',
+      viewerClosed: 'returning',
+    },
+    walkingOut: {
+      pointerMove: 'walkingOut',
+      taskStarted: 'returning',
+      clipFinished: 'handingFile',
+      viewerClosed: 'returning',
+    },
     handingFile: { pointerMove: 'handingFile', taskStarted: 'returning', viewerClosed: 'returning' },
     returning: { pointerMove: 'returning', taskStarted: 'returning', clipFinished: 'resting' },
     error: { pointerMove: 'error', taskStarted: 'working', clipFinished: 'resting' },
