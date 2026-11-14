@@ -1,5 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
-import { fastMode } from '../app/env'
+import { describe, expect, it } from 'vitest'
 import { tokens } from './tokens'
 
 describe('tokens', () => {
@@ -59,31 +58,5 @@ describe('tokens', () => {
 
   it('hands over a file in the orange of the desk chair', () => {
     expect(tokens.orange).toBe('#F5570A')
-  })
-})
-
-describe('fastMode', () => {
-  afterEach(() => {
-    window.history.replaceState({}, '', '/')
-  })
-
-  it('is true when the URL has ?fast=1', () => {
-    window.history.replaceState({}, '', '/?fast=1')
-    expect(fastMode()).toBe(true)
-  })
-
-  it('is true when fast=1 is one of several query parameters', () => {
-    window.history.replaceState({}, '', '/?mode=mock&fast=1')
-    expect(fastMode()).toBe(true)
-  })
-
-  it('is false without a query string', () => {
-    window.history.replaceState({}, '', '/')
-    expect(fastMode()).toBe(false)
-  })
-
-  it('is false for other fast values', () => {
-    window.history.replaceState({}, '', '/?fast=0')
-    expect(fastMode()).toBe(false)
   })
 })

@@ -1,8 +1,35 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { fastMode } from './env'
 
 afterEach(() => {
   vi.restoreAllMocks()
   vi.resetModules()
+})
+
+describe('fastMode', () => {
+  afterEach(() => {
+    window.history.replaceState({}, '', '/')
+  })
+
+  it('is true when the URL has ?fast=1', () => {
+    window.history.replaceState({}, '', '/?fast=1')
+    expect(fastMode()).toBe(true)
+  })
+
+  it('is true when fast=1 is one of several query parameters', () => {
+    window.history.replaceState({}, '', '/?mode=mock&fast=1')
+    expect(fastMode()).toBe(true)
+  })
+
+  it('is false without a query string', () => {
+    window.history.replaceState({}, '', '/')
+    expect(fastMode()).toBe(false)
+  })
+
+  it('is false for other fast values', () => {
+    window.history.replaceState({}, '', '/?fast=0')
+    expect(fastMode()).toBe(false)
+  })
 })
 
 describe('PAGE_LOADED_AT', () => {
