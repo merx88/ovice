@@ -113,6 +113,10 @@ test.describe('in a browser without WebGL', () => {
 
   test('a notice stands where the office would be, and everything else works', async ({ page }) => {
     const prompt = 'Compare two ways to brew coffee at home'
+    const modelRequests: string[] = []
+    page.on('request', (request) => {
+      if (request.url().endsWith('/models/ovice_guy.glb')) modelRequests.push(request.url())
+    })
     await page.goto('/?fast=1')
 
     await expect(page.getByRole('alert')).toHaveText('3D 화면을 불러오지 못했어요')
@@ -139,5 +143,8 @@ test.describe('in a browser without WebGL', () => {
     await expect(settings.getByRole('radio', { name: '프로토타입' })).toBeChecked()
     await page.keyboard.press('Escape')
     await expect(settings).toHaveCount(0)
+
+    // And the character's model, the page's largest download, was never asked for: nothing could have shown it.
+    expect(modelRequests).toEqual([])
   })
 })

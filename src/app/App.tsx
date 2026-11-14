@@ -1,6 +1,7 @@
 import { Canvas } from '@react-three/fiber'
 import { useEffect, useRef, useState } from 'react'
 import { NeutralToneMapping } from 'three'
+import { preloadCharacter } from '../character/Character'
 import { EMPTY_OFFICE_LABEL, sceneLabel } from '../character/sceneLabel'
 import { CAMERA } from '../scene/layout'
 import { OfficeScene } from '../scene/OfficeScene'
@@ -61,6 +62,11 @@ function Picture() {
  */
 function Scene() {
   const [webgl] = useState(isWebGLAvailable)
+  // The character's model starts downloading as the app starts, before the scene is ready to ask for it,
+  // and only where the scene can be drawn.
+  useEffect(() => {
+    if (webgl) preloadCharacter()
+  }, [webgl])
   if (!webgl) return <SceneFallback />
   return (
     <SceneErrorBoundary>

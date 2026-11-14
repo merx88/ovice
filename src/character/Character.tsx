@@ -371,4 +371,11 @@ export function Character(props: CharacterProps) {
   )
 }
 
-useGLTF.preload(MODEL_URL)
+/**
+ * Starts downloading the character's model, the largest file of the page,
+ * ahead of the first render that needs it. Called only where the scene can
+ * be drawn: elsewhere the download would be for nothing.
+ */
+export function preloadCharacter(): void {
+  useGLTF.preload(MODEL_URL)
+}

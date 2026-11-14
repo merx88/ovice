@@ -11,6 +11,8 @@ import { App } from './App'
 
 /** Whether the stand-in scene fails, and how often the stand-ins for the canvas and the scene have been rendered. */
 const scene = vi.hoisted(() => ({ fails: false, renders: 0, canvasRenders: 0 }))
+/** What the app asks of the character's module: to start downloading its model. */
+const character = vi.hoisted(() => ({ preload: vi.fn() }))
 
 // The renderer and the 3D scene need WebGL; stand-ins are enough to see what the app puts where.
 vi.mock('@react-three/fiber', () => ({
@@ -28,6 +30,7 @@ vi.mock('@react-three/fiber', () => ({
     )
   }),
 }))
+vi.mock('../character/Character', () => ({ preloadCharacter: character.preload }))
 vi.mock('../scene/OfficeScene', () => ({
   // Through `memo`, as the real one is exported (its type says so).
   OfficeScene: memo(function OfficeScene() {
@@ -58,6 +61,7 @@ describe('App', () => {
     useCharacterSignals.getState().publish(NOBODY)
     scene.renders = 0
     scene.canvasRenders = 0
+    character.preload.mockClear()
   })
 
   afterEach(() => {
@@ -131,6 +135,20 @@ describe('App', () => {
     render(<App />)
     expect(screen.getByRole('alert')).toHaveTextContent('3D 화면을 불러오지 못했어요')
     expect(screen.queryByTestId('canvas')).not.toBeInTheDocument()
+  })
+
+  describe("the character's model", () => {
+    it('starts downloading as the app starts where WebGL is available', () => {
+      stubWebGL(true)
+      render(<App />)
+      expect(character.preload).toHaveBeenCalledTimes(1)
+    })
+
+    it('is not downloaded where WebGL is unavailable: nothing could show it', () => {
+      stubWebGL(false)
+      render(<App />)
+      expect(character.preload).not.toHaveBeenCalled()
+    })
   })
 
   describe('the picture of the office', () => {
