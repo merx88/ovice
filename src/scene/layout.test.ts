@@ -22,6 +22,7 @@ import {
   HANDOFF_FACING,
   HANDOFF_POS,
   LAPTOP_POS,
+  MOBILE_BREAKPOINT,
   PARALLAX_RANGE,
   SEAT_FACING,
   SEAT_GROUND_POS,
@@ -480,6 +481,32 @@ describe('cameraFor', () => {
   it('uses the mobile camera below 768 px wide', () => {
     expect(cameraFor(767)).toBe(CAMERA_MOBILE)
     expect(cameraFor(390)).toBe(CAMERA_MOBILE)
+  })
+})
+
+describe('MOBILE_BREAKPOINT in the stylesheets', () => {
+  const stylesheets = import.meta.glob<string>('../**/*.css', { query: '?raw', import: 'default', eager: true })
+  /** Every width a media query switches at, with the file and the side it bounds. */
+  const widths = Object.entries(stylesheets).flatMap(([file, css]) =>
+    [...css.matchAll(/@media[^{]*/g)].flatMap(([query]) =>
+      [...query.matchAll(/\((min|max)-width:\s*(\d+)px\)/g)].map(([, side, px]) => ({ file, side, px: Number(px) })),
+    ),
+  )
+  /**
+   * The widths that are the interface's own, which the scene does not go by:
+   * the tighter edges below 900 px, the smaller tab text on the narrowest
+   * phones, and the tasks panel standing above the prompt panel up to 1125 px.
+   */
+  const INTERFACE_ONLY = [900, 359, 1125]
+
+  it('is where the stylesheets switch to the narrow layout, as the camera switches to the narrow view', () => {
+    expect(Object.keys(stylesheets)).toContain('../ui/ui.css')
+    const narrow = widths.filter(({ px }) => !INTERFACE_ONLY.includes(px))
+    expect(narrow.length).toBeGreaterThanOrEqual(7)
+    for (const { file, side, px } of narrow) {
+      // A max-width takes in the width it names, a min-width starts at it.
+      expect(px, `${file}: (${side}-width: ${px}px)`).toBe(side === 'max' ? MOBILE_BREAKPOINT - 1 : MOBILE_BREAKPOINT)
+    }
   })
 })
 
