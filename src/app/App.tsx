@@ -6,7 +6,7 @@ import { CAMERA } from '../scene/layout'
 import { OfficeScene } from '../scene/OfficeScene'
 import { SceneErrorBoundary, SceneFallback } from '../scene/SceneErrorBoundary'
 import { isWebGLAvailable } from '../scene/webgl'
-import { useCharacterPlace, useCharacterPresent, useCharState } from '../store/characterSignals'
+import { useCharacterSignals, type CharacterSignals } from '../store/characterSignals'
 import { tokens } from '../theme/tokens'
 import { Overlay } from '../ui/Overlay'
 
@@ -19,18 +19,25 @@ import { Overlay } from '../ui/Overlay'
  * the character's speech bubble in there, and what is inside an image is
  * hidden from assistive technology. It is not a live region either: what the
  * character says is announced by its speech bubble.
+ *
+ * It changes with every step the character takes, and it is written onto the
+ * canvas as it changes, without a render: every render of the canvas renders
+ * what is inside it again.
  */
 function Picture() {
-  const present = useCharacterPresent()
-  const charState = useCharState()
-  const place = useCharacterPlace()
-  const label = present ? sceneLabel(charState, place) : EMPTY_OFFICE_LABEL
-
   const canvas = useRef<HTMLCanvasElement>(null)
   useEffect(() => {
-    canvas.current?.setAttribute('role', 'img')
-    canvas.current?.setAttribute('aria-label', label)
-  }, [label])
+    const picture = canvas.current
+    if (!picture) return
+    picture.setAttribute('role', 'img')
+    const describe = ({ present, charState, place }: CharacterSignals) => {
+      const label = present ? sceneLabel(charState, place) : EMPTY_OFFICE_LABEL
+      // Written only when it differs, as a render would have done.
+      if (picture.getAttribute('aria-label') !== label) picture.setAttribute('aria-label', label)
+    }
+    describe(useCharacterSignals.getState())
+    return useCharacterSignals.subscribe(describe)
+  }, [])
 
   return (
     <Canvas

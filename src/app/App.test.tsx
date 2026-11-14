@@ -1,21 +1,25 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { Children, forwardRef, isValidElement, type ReactNode } from 'react'
+import { Children, forwardRef, isValidElement, memo, type ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cancelActive } from '../agent/orchestrator'
 import { EMPTY_OFFICE_LABEL, sceneLabel } from '../character/sceneLabel'
+import type { OfficeScene as RealOfficeScene } from '../scene/OfficeScene'
 import { useCharacterSignals, type CharacterSignals } from '../store/characterSignals'
 import { useTasks } from '../store/tasks'
 import { App } from './App'
 
-const scene = vi.hoisted(() => ({ fails: false }))
+/** Whether the stand-in scene fails, and how often the stand-ins for the canvas and the scene have been rendered. */
+const scene = vi.hoisted(() => ({ fails: false, renders: 0, canvasRenders: 0 }))
 
 // The renderer and the 3D scene need WebGL; stand-ins are enough to see what the app puts where.
 vi.mock('@react-three/fiber', () => ({
   // Renders the components inside the canvas, leaving out three.js elements such as <color>, beside a
-  // <canvas> of its own. As with the real one, a ref to it is that <canvas>, and whatever the scene puts
-  // into the page (the folder's button, the speech bubble) is beside the <canvas>, not inside it.
+  // <canvas> of its own. As with the real one, a ref to it is that <canvas>, whatever the scene puts
+  // into the page (the folder's button, the speech bubble) is beside the <canvas>, not inside it, and
+  // every render of the canvas renders what is inside it again.
   Canvas: forwardRef<HTMLCanvasElement, { children: ReactNode }>(function Canvas({ children }, ref) {
+    scene.canvasRenders += 1
     return (
       <div data-testid="canvas">
         <canvas ref={ref} />
@@ -25,10 +29,12 @@ vi.mock('@react-three/fiber', () => ({
   }),
 }))
 vi.mock('../scene/OfficeScene', () => ({
-  OfficeScene: () => {
+  // Through `memo`, as the real one is exported (its type says so).
+  OfficeScene: memo(function OfficeScene() {
+    scene.renders += 1
     if (scene.fails) throw new Error('the model failed to load')
     return <span>office</span>
-  },
+  }) satisfies typeof RealOfficeScene,
 }))
 
 /** Makes every canvas hand out a WebGL context, or none at all. */
@@ -50,6 +56,8 @@ describe('App', () => {
     localStorage.clear()
     useTasks.setState({ tasks: [], activeId: null, viewingId: null })
     useCharacterSignals.getState().publish(NOBODY)
+    scene.renders = 0
+    scene.canvasRenders = 0
   })
 
   afterEach(() => {
@@ -158,6 +166,33 @@ describe('App', () => {
       expect(picture()).toHaveAccessibleName(sceneLabel('handingFile', 'desk'))
       act(() => useCharacterSignals.getState().publish(NOBODY))
       expect(picture()).toHaveAccessibleName(EMPTY_OFFICE_LABEL)
+    })
+
+    it('is rendered by React once: neither what the character does nor a render of the app renders the scene again', () => {
+      stubWebGL(true)
+      const { rerender } = render(<App />)
+      expect(scene.renders).toBe(1)
+
+      // The character appears, changes what it does and where it is, and goes again: the description follows...
+      characterIs({ charState: 'resting', place: 'desk' })
+      expect(picture()).toHaveAccessibleName(sceneLabel('resting', 'desk'))
+      characterIs({ charState: 'goingToSofa', place: 'desk' })
+      expect(picture()).toHaveAccessibleName(sceneLabel('goingToSofa', 'desk'))
+      characterIs({ charState: 'resting', place: 'sofa' })
+      expect(picture()).toHaveAccessibleName(sceneLabel('resting', 'sofa'))
+      act(() => useCharacterSignals.getState().publish(NOBODY))
+      expect(picture()).toHaveAccessibleName(EMPTY_OFFICE_LABEL)
+      // ...without a render of the canvas, let alone of the scene.
+      expect(scene.canvasRenders).toBe(1)
+      expect(scene.renders).toBe(1)
+
+      // The app rendered again renders the canvas again, but not the scene, and the description stays.
+      rerender(<App />)
+      expect(scene.renders).toBe(1)
+      expect(picture()).toHaveAccessibleName(EMPTY_OFFICE_LABEL)
+      characterIs({ charState: 'working', place: 'desk' })
+      expect(picture()).toHaveAccessibleName(sceneLabel('working', 'desk'))
+      expect(scene.renders).toBe(1)
     })
 
     it('is no live region: what the character says is announced by its speech bubble', () => {
