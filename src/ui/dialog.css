@@ -308,14 +308,14 @@
   outline-offset: 2px;
 }
 
+/* Always in the page, so that screen readers notice the text arriving in it, and a line tall while it
+   is empty, so that nothing moves when the text comes. */
 .settings__notice {
+  min-height: 1.5em;
   margin: 0;
   color: var(--c-ui-grey);
   font-size: 14px;
-}
-
-.settings__notice:empty {
-  display: none;
+  line-height: 1.5;
 }
 
 .switch {

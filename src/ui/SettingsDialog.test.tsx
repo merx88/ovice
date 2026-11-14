@@ -2,9 +2,18 @@ import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useSettings } from '../store/settings'
+import dialogStylesheet from './dialog.css?raw'
 import { SettingsDialog } from './SettingsDialog'
 
 const NOT_READY = '실제 모드는 준비 중이에요. 프로토타입 모드로 계속할게요.'
+
+/** Every rule of `css` with `className` in its selector: the selector and its declarations. */
+function rulesFor(css: string, className: string): { selector: string; declarations: string }[] {
+  const withoutComments = css.replace(/\/\*[\s\S]*?\*\//g, '')
+  return [...withoutComments.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+    .map(([, selector, declarations]) => ({ selector: selector.trim(), declarations }))
+    .filter(({ selector }) => selector.split(',').some((part) => part.includes(className)))
+}
 
 const prototype = () => screen.getByRole('radio', { name: '프로토타입' })
 const real = () => screen.getByRole('radio', { name: '실제 (준비 중)' })
@@ -54,6 +63,23 @@ describe('SettingsDialog: the agent mode', () => {
     await userEvent.click(prototype())
     expect(screen.queryByText(NOT_READY)).not.toBeInTheDocument()
     expect(prototype()).toBeChecked()
+  })
+})
+
+describe('SettingsDialog: the notice in the stylesheet', () => {
+  const notice = rulesFor(dialogStylesheet, '.settings__notice')
+
+  it('never takes the notice out of the page: a live region that is not displayed may not be announced', () => {
+    expect(notice.map(({ selector }) => selector)).toContain('.settings__notice')
+    for (const { selector, declarations } of notice) expect(declarations, selector).not.toMatch(/display\s*:\s*none/)
+  })
+
+  it('keeps a line free for it while it is empty, so that nothing moves when the text comes', () => {
+    const own = notice.find(({ selector }) => selector === '.settings__notice')?.declarations ?? ''
+    const minHeight = Number(/min-height\s*:\s*([\d.]+)em\s*;/.exec(own)?.[1])
+    const lineHeight = Number(/line-height\s*:\s*([\d.]+)\s*;/.exec(own)?.[1])
+    expect(minHeight).toBeGreaterThan(0)
+    expect(minHeight).toBe(lineHeight)
   })
 })
 
