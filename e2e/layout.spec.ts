@@ -2,7 +2,7 @@
 // the screen. (How the interface looks at every size is not an end-to-end
 // matter; this only makes sure that the page cannot be pushed sideways.)
 import type { Page } from '@playwright/test'
-import { bubbles, characterLoaded, expect, openTasks, progressPill, promptField, send, test } from './fixtures'
+import { bubbles, characterAppeared, expect, openTasks, progressPill, promptField, send, test } from './fixtures'
 
 test.use({ viewport: { width: 390, height: 844 } })
 
@@ -51,7 +51,7 @@ test('on a phone nothing is wider than the screen', async ({ page }) => {
   await expect(settings).toHaveCount(0)
 
   // A task under way, with the longest line the character says beside its head.
-  await characterLoaded(page)
+  await characterAppeared(page)
   await send(page, 'Where do the cheapest flights to Jeju leave from in the first week of March?')
   await expect(progressPill(page)).toBeVisible()
   await expectNothingWiderThanTheScreen(page, 'with a task running')

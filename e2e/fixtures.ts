@@ -1,7 +1,7 @@
 // What every end-to-end test starts from: a page whose third-party font
 // requests are answered locally, whose console is watched for trouble, and
-// which keeps a record of what the character said. Import `test` and `expect`
-// from here instead of from Playwright.
+// which keeps a record of what the character said and did. Import `test` and
+// `expect` from here instead of from Playwright.
 import { test as base, expect, type Locator, type Page } from '@playwright/test'
 
 /** What a spec file or a single test can set with `test.use()`. */
@@ -9,7 +9,8 @@ export interface Options {
   /**
    * Turns the "reduce motion" setting on before the page loads, by the same
    * key the settings dialog saves it under. The character is then put where
-   * it is going instead of walking there, which takes four times fewer frames.
+   * it is going instead of walking or running there: a hand-over takes four
+   * times fewer frames, and the way to the sofa or back none at all.
    */
   reduceMotion: boolean
   /** False makes the browser refuse every WebGL context, as one without a working graphics stack does. */
@@ -34,28 +35,54 @@ export const DONE_LINES = ['The research is ready.', 'Let me hand you the file.'
 export const CANCEL_LINE = 'Okay, stopping.'
 
 /**
+ * How the picture of the office is described, which is how a test knows
+ * where the character is and what it is doing (the sentences of
+ * `src/character/sceneLabel.ts`).
+ */
+export const SCENE = {
+  /** The character's model has not arrived yet. */
+  empty: '3D 사무실에 캐릭터가 아직 나타나지 않았어요.',
+  atDesk: '3D 사무실의 캐릭터가 책상에 앉아 기다리고 있어요.',
+  toSofa: '3D 사무실의 캐릭터가 소파로 걸어가고 있어요.',
+  onSofa: '3D 사무실의 캐릭터가 소파에 앉아 쉬고 있어요.',
+  toDesk: '3D 사무실의 캐릭터가 책상으로 뛰어가고 있어요.',
+  working: '3D 사무실의 캐릭터가 책상에서 일하고 있어요.',
+  bringing: '3D 사무실의 캐릭터가 결과를 전하러 책상 앞으로 나오고 있어요.',
+  holding: '3D 사무실의 캐릭터가 책상 앞에서 결과 파일을 내밀고 있어요.',
+  returning: '3D 사무실의 캐릭터가 책상으로 돌아가고 있어요.',
+  failed: '3D 사무실의 캐릭터가 일이 잘 풀리지 않아 머리를 긁적이고 있어요.',
+} as const
+
+/** Any of the descriptions that say what the character is doing: all of them but the office without it. */
+const WITH_CHARACTER = new RegExp(
+  `^(${Object.values(SCENE)
+    .filter((sentence) => sentence !== SCENE.empty)
+    .map((sentence) => sentence.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .join('|')})$`,
+)
+
+/**
  * How long the character may take to bring a result to the front of its desk
  * (ms). It needs some fifty frames for that; a machine that draws the scene
- * in software manages about one a second.
+ * in software manages about one a second. A sip of coffee it has just begun
+ * is finished first, which is another forty-six.
  */
 export const HANDOVER_TIMEOUT = 150_000
 
 /**
- * How many frames `characterLoaded` lets the scene draw after the character's
- * model has arrived: half as many again as it took the character to appear
- * on the machine this was written on (6 to 10), where a frame takes a second.
+ * How long the character may take to walk to the sofa and sit down on it
+ * (ms), from the moment it leaves its desk: some seventy frames.
  */
-const FRAMES_UNTIL_CHARACTER = 15
+export const TO_SOFA_TIMEOUT = 150_000
+
+/** How long it may take to run back and sit down at its desk (ms): some forty frames. */
+export const TO_DESK_TIMEOUT = 100_000
 
 /** The record the page keeps for the tests (see `recordWhatIsShown`). */
 interface Shown {
   said: string[][]
   pill: string[]
-  /**
-   * How many frames the page has drawn since the character's model arrived,
-   * counted up to `FRAMES_UNTIL_CHARACTER`, and when it arrived (ms); null until it has.
-   */
-  model: { frames: number; arrivedAt: number } | null
+  scene: string[]
 }
 
 declare global {
@@ -66,25 +93,14 @@ declare global {
 
 /**
  * Runs in the page before any of its scripts: notes every state of the
- * character's speech bubbles and every text of the progress pill, in the
- * order they came up. With shortened timings a line can be gone again before
- * a test gets to look at the page; the record has it all the same. It also
- * counts the first `framesToCount` frames drawn after the character's model
- * has arrived, and then stops asking for frames: a page with nothing moving
- * on it would not draw any.
+ * character's speech bubbles, every text of the progress pill and every
+ * description the picture of the office has had, in the order they came up.
+ * With shortened timings a line can be gone again before a test gets to look
+ * at the page; the record has it all the same.
  */
-function recordWhatIsShown(framesToCount: number) {
-  const shown: Shown = { said: [], pill: [], model: null }
+function recordWhatIsShown() {
+  const shown: Shown = { said: [], pill: [], scene: [] }
   window.__shown = shown
-
-  const onFrame = (now: number) => {
-    if (shown.model) shown.model.frames += 1
-    else if (performance.getEntriesByType('resource').some((entry) => entry.name.endsWith('/models/ovice_guy.glb'))) {
-      shown.model = { frames: 0, arrivedAt: now }
-    }
-    if (!shown.model || shown.model.frames < framesToCount) requestAnimationFrame(onFrame)
-  }
-  requestAnimationFrame(onFrame)
 
   let lastSaid = '[]'
   new MutationObserver(() => {
@@ -96,7 +112,15 @@ function recordWhatIsShown(framesToCount: number) {
     }
     const pill = document.querySelector('.pill--progress .pill__text')?.textContent
     if (pill != null && shown.pill.at(-1) !== pill) shown.pill.push(pill)
-  }).observe(document, { childList: true, subtree: true, characterData: true })
+    const scene = document.querySelector('canvas')?.getAttribute('aria-label')
+    if (scene != null && shown.scene.at(-1) !== scene) shown.scene.push(scene)
+  }).observe(document, {
+    childList: true,
+    subtree: true,
+    characterData: true,
+    attributes: true,
+    attributeFilter: ['aria-label'],
+  })
 }
 
 function seedReducedMotion() {
@@ -158,7 +182,7 @@ export const test = base.extend<Options>({
   page: async ({ page, reduceMotion, webgl }, use) => {
     await answerFontHosts(page)
     const trouble = watchForTrouble(page)
-    await page.addInitScript(recordWhatIsShown, FRAMES_UNTIL_CHARACTER)
+    await page.addInitScript(recordWhatIsShown)
     if (reduceMotion) await page.addInitScript(seedReducedMotion)
     if (!webgl) await page.addInitScript(refuseWebGL)
 
@@ -241,24 +265,29 @@ export function pillTexts(page: Page): Promise<string[]> {
 }
 
 /**
- * Waits until the character has most likely appeared. Nothing in the page's
- * DOM says when it has: its model is downloaded and unpacked after the page
- * has loaded, and the character then simply sits there. This waits until the
- * scene has been drawn `FRAMES_UNTIL_CHARACTER` times since the model
- * arrived. On a fast machine those frames are over at once and the seconds
- * decide.
- *
- * It is a head start, not a proof. A test that needs to know the character
- * is there goes on to something only a character that is there does: saying
- * a line.
+ * The picture of the office: the canvas, whose name says where the character
+ * is and what it is doing (one of `SCENE`).
  */
-export async function characterLoaded(page: Page) {
-  await page.waitForFunction(
-    ({ frames, ms }) => {
-      const model = window.__shown?.model
-      return model != null && model.frames >= frames && performance.now() - model.arrivedAt >= ms
-    },
-    { frames: FRAMES_UNTIL_CHARACTER, ms: 3000 },
-    { polling: 250, timeout: 120_000 },
-  )
+export function picture(page: Page): Locator {
+  return page.getByRole('img')
+}
+
+/**
+ * Every description the picture has had since the page was loaded, oldest
+ * first: the places the character has been and the things it has done, each
+ * once per stretch.
+ */
+export function scenes(page: Page): Promise<string[]> {
+  return page.evaluate(() => window.__shown?.scene ?? [])
+}
+
+/**
+ * Waits until the character has appeared: its model is downloaded and
+ * unpacked after the page has loaded, and until then the picture is described
+ * as an office without it. Where the character is by the time this returns
+ * depends on how long the test took to get here: ten seconds after it
+ * appears, with the chat left alone, it is off to the sofa.
+ */
+export async function characterAppeared(page: Page) {
+  await expect(picture(page)).toHaveAccessibleName(WITH_CHARACTER, { timeout: 120_000 })
 }

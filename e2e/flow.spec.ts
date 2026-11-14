@@ -3,19 +3,24 @@
 import {
   bubbles,
   CANCEL_LINE,
-  characterLoaded,
+  characterAppeared,
   DONE_LINES,
   expect,
   folder,
   HANDOVER_TIMEOUT,
   openTasks,
+  picture,
   pillTexts,
   progressPill,
   promptField,
   said,
+  SCENE,
+  scenes,
   send,
   STEP_LINES,
   test,
+  TO_DESK_TIMEOUT,
+  TO_SOFA_TIMEOUT,
   viewer,
 } from './fixtures'
 
@@ -28,23 +33,47 @@ test('the first screen shows the office tab, the prompt field and the 3D office'
   await expect(promptField(page)).toBeEditable()
   await expect(page.locator('canvas')).toBeVisible()
 
-  // The character's model is there to be drawn, and drawing it upsets nothing.
+  // The character's model is there to be drawn, and drawing it upsets nothing: the picture is described
+  // as an office without its character until it has appeared, and then it waits at its desk.
   expect((await modelLoaded).status()).toBe(200)
-  await characterLoaded(page)
+  await characterAppeared(page)
+  expect(await scenes(page)).toEqual([SCENE.empty, SCENE.atDesk])
   await expect(page.getByRole('alert')).toHaveCount(0)
 })
 
-test('a prompt is worked on, and its result is brought out, opened and listed as done', async ({ page }) => {
+test('a prompt typed while the character sits on the sofa calls it back, and its result is brought out, opened and listed as done', async ({ page }) => {
+  // The walk to the sofa alone is some seventy frames, and the machine these tests were written on draws one a second.
+  test.setTimeout(420_000)
   const prompt = 'Compare three note-taking apps for a small team'
   await page.goto('/?fast=1')
 
-  // While the task runs, the pill in place of the field shows what was asked.
+  // Left alone for ten seconds, the character walks to the sofa and sits down on it.
+  await characterAppeared(page)
+  await expect(picture(page)).toHaveAccessibleName(SCENE.toSofa, { timeout: 40_000 })
+  await expect(picture(page)).toHaveAccessibleName(SCENE.onSofa, { timeout: TO_SOFA_TIMEOUT })
+
+  // The first key pressed in the chat field sends it running back to its desk...
+  await promptField(page).press('C')
+  await expect(picture(page)).toHaveAccessibleName(SCENE.toDesk)
+  // ...and the prompt is written and sent while it is still on its way: the pill in place of the field shows what was asked.
   await send(page, prompt)
   await expect.poll(() => pillTexts(page)).toEqual([prompt])
 
-  // The character stands up, walks round its desk and holds the result out: one bubble, saying the second line.
-  await expect(bubbles(page)).toHaveText([DONE_LINES[1]], { timeout: HANDOVER_TIMEOUT })
+  // It sits down, gets up for the result, walks round its desk and holds it out: one bubble, saying the second line.
+  await expect(bubbles(page)).toHaveText([DONE_LINES[1]], { timeout: TO_DESK_TIMEOUT + HANDOVER_TIMEOUT })
   await expect(promptField(page)).toBeVisible()
+  await expect(picture(page)).toHaveAccessibleName(SCENE.holding)
+  // That is the whole of what it did. (With these shortened timings the task is over before the character is back
+  // at its desk; on a machine where it is not, the character is seen working there first.)
+  expect((await scenes(page)).filter((scene) => scene !== SCENE.working)).toEqual([
+    SCENE.empty,
+    SCENE.atDesk,
+    SCENE.toSofa,
+    SCENE.onSofa,
+    SCENE.toDesk,
+    SCENE.bringing,
+    SCENE.holding,
+  ])
   // On the way it said nothing but its lines, one at a time, and never said it was stopping.
   const history = await said(page)
   for (const lines of history) {
@@ -75,7 +104,7 @@ test('a task that is stopped half-way has the character say so and gives the fie
   const prompt = 'Find the best season to visit Jeju'
   // At the speed a visitor sees: the task has to last until the character is there.
   await page.goto('/')
-  await characterLoaded(page)
+  await characterAppeared(page)
 
   await send(page, prompt)
   await expect(progressPill(page)).toContainText(prompt)
@@ -134,11 +163,12 @@ test.describe('after a reload', () => {
     })
     expect(createdAt).toBeLessThan(reloadedAt)
 
-    // So when the character appears it leaves that result alone. (As far as a
-    // test can tell: see `characterLoaded` for how sure it is that it has appeared.)
-    await characterLoaded(page)
+    // So when the character appears it leaves that result alone: it has said nothing and brought nothing
+    // out. All it has done is wait, at its desk or, if getting here took ten seconds, on the sofa by now.
+    await characterAppeared(page)
     expect(await said(page)).toEqual([])
     await expect(folder(page)).toHaveCount(0)
+    for (const scene of await scenes(page)) expect([SCENE.empty, SCENE.atDesk, SCENE.onSofa]).toContain(scene)
 
     // It is there, though, and brings out what is asked of it now.
     await send(page, second)
