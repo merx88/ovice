@@ -15,18 +15,25 @@
 // and the shade that is painted along the notch is kept off the new surface.
 // What is left is one finger, as thick as its neighbours.
 //
+// The shading at the knuckle. Where the zipped line ends at the knuckle a
+// shallow dent is left, and normals taken from the faces right there shade it
+// as a small dark pit. In a second step the points round it take the normal of
+// the surface at large. That step moves nothing, and it is made on the zipped
+// model as the file holds it, so a model zipped by an earlier version of this
+// script comes out the same as one zipped now.
+//
 // Only numbers change: positions, normals and texture coordinates of a few
 // hundred vertices of the body mesh. No vertex or triangle is added or removed,
 // the file keeps its size, and textures, skin, bones, eyes and animation stay
 // byte for byte what they were. The triangles of the small finger's side wall
 // remain, collapsed to nothing along the zipped line.
 //
-// Exit code 0: the finger was removed, or an earlier run had already removed
-// it (the file is then left untouched). Exit code 1, with a sentence that says
-// why: the file is not a model this script can read (no binary glTF, no
-// meshes, a body without normals or texture coordinates), no doubled finger
-// and no trace of this repair was found, or the result did not pass its own
-// check. Nothing is written then.
+// Exit code 0: the repair was made or completed, or an earlier run had already
+// made all of it (the file is then left untouched). Exit code 1, with a
+// sentence that says why: the file is not a model this script can read (no
+// binary glTF, no meshes, a body without normals or texture coordinates), no
+// doubled finger and no trace of this repair was found, or the result did not
+// pass its own check. Nothing is written then.
 import { readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
@@ -74,6 +81,15 @@ const SHADE_REACH = 0.0035
 const SHADE_PASSES = 60
 /** Points on the zipped line within this distance of each other share one normal. */
 const SEAM_RADIUS = 0.003
+/**
+ * The zipped line is where triangles have no area to speak of (a doubled area below `flat`), and the pit lies `beyond`
+ * its knuckle end. Points within `core` of the pit take the normal of the surface at large, which is the faces around
+ * weighted by their area and by a bell curve as wide as `spread`; from there out to `radius` they keep more and more
+ * of the normal they have.
+ */
+const KNUCKLE_SHADING = { flat: 1e-9, beyond: 0.002, core: 0.004, radius: 0.009, spread: 0.004 }
+/** Faces turned further than this from the surface at large (as a cosine) are the folds of the zip and tell nothing of it. */
+const FOLDED = 0.3
 
 // --- Reading and writing the file ---------------------------------------------
 
@@ -527,6 +543,56 @@ function smoothLine(line, passes) {
   return current
 }
 
+// --- The shading at the knuckle -------------------------------------------------
+
+/**
+ * The normals the points round the pit of one hand should have: `storedNormal(point)` turned towards the normal of
+ * the surface at large, all the way within `KNUCKLE_SHADING.core` of the pit. `settled` tells whether the points
+ * within the core have that normal already, which is how a second run knows the first.
+ */
+function knuckleShading(mesh, at, storedNormal) {
+  const faces = faceNormals(mesh.triangles, at)
+  const centres = mesh.triangles.map(([a, b, c]) => scale(add(add(at[a], at[b]), at[c]), 1 / 3))
+  const { flat, beyond, core, radius, spread } = KNUCKLE_SHADING
+  // The knuckle end of the zipped line: of the corners of its flat triangles, the one nearest the wrist.
+  let end = null
+  mesh.triangles.forEach((triangle, t) => {
+    const centre = centres[t]
+    if (!onFreeFinger(centre[0]) || centre[2] >= NOTCH_REGION.maxZ || centre[1] <= NOTCH_REGION.minY || length(faces[t]) >= flat) return
+    for (const point of triangle) if (!end || at[point][0] < end[0]) end = at[point]
+  })
+  if (!end) return null
+  const pit = [end[0] - beyond, end[1], end[2]]
+  // Faces further away than this are more than four bell widths from every point shaded anew, and weigh next to nothing there.
+  const within = centres.flatMap((centre, t) => (distance(centre, pit) < radius + 4 * spread ? [t] : []))
+  const surfaceNormal = (place) => {
+    const weighted = within.map((t) => scale(faces[t], Math.exp(-(distance(centres[t], place) ** 2) / (2 * spread ** 2))))
+    const all = weighted.reduce(add, [0, 0, 0])
+    const facing = weighted.filter((normal, i) => dot(faces[within[i]], all) > FOLDED * length(faces[within[i]]) * length(all))
+    const sum = facing.reduce(add, [0, 0, 0])
+    return scale(sum, 1 / length(sum))
+  }
+  const shaded = []
+  let settled = 0
+  let inCore = 0
+  at.forEach((place, point) => {
+    const away = distance(place, pit)
+    if (away >= radius) return
+    const share = 1 - smoothstep(core, radius, away)
+    const stored = storedNormal(point)
+    const smooth = surfaceNormal(place)
+    const mixed = mix(stored.mean, smooth, share)
+    const normal = scale(mixed, 1 / length(mixed))
+    if (share === 1) {
+      inCore++
+      if (stored.copies.every((copy) => copy.every((value, axis) => Math.abs(value - normal[axis]) < 1e-6))) settled++
+    }
+    const cosine = dot(stored.mean, normal) / length(stored.mean)
+    shaded.push({ point, normal, turned: (Math.acos(Math.min(1, cosine)) * 180) / Math.PI })
+  })
+  return { shaded, inCore, settled }
+}
+
 // --- Main -----------------------------------------------------------------------
 
 const path = process.argv[2] ?? fileURLToPath(new URL('../public/models/ovice_guy.glb', import.meta.url))
@@ -537,14 +603,8 @@ const where = {
   normal: locateAccessor(glb, body.attributes.NORMAL, FLOAT, 3, 'normals (NORMAL)'),
   uv: locateAccessor(glb, body.attributes.TEXCOORD_0, FLOAT, 2, 'texture coordinates (TEXCOORD_0)'),
 }
-const positions = readFloats(glb, where.position)
-const normals = readFloats(glb, where.normal)
-const uvs = readFloats(glb, where.uv)
 const indices = readIndices(glb, body.indices)
-const mesh = weld(positions, indices)
 const triangleCount = indices.length / 3
-console.log(`${path}`)
-console.log(`body: ${positions.length / 3} vertices on ${mesh.points.length} points, ${triangleCount} triangles`)
 
 const SIDES = [
   { name: 'left hand', sign: 1 },
@@ -552,90 +612,157 @@ const SIDES = [
 ]
 /** The points with the right hand turned into a left one, or back. */
 const mirrored = (points, sign) => points.map(([x, y, z]) => [x * sign, y, z])
-/** The mesh to go with them: mirroring turns every triangle inside out, so its corners are taken the other way round. */
-const handed = (sign) => (sign > 0 ? mesh : { ...mesh, triangles: mesh.triangles.map(([a, b, c]) => [a, c, b]) })
-const found = SIDES.map(({ sign }) => {
-  const at = mirrored(mesh.points, sign)
-  return { notch: countNotchEdges(handed(sign), at), zipped: countZippedTriangles(handed(sign), at) }
-})
-SIDES.forEach(({ name }, i) => console.log(`${name}: ${found[i].notch} creased edges along the finger, ${found[i].zipped} collapsed triangles`))
-
-if (found.every(({ notch }) => notch < NOTCH_EDGES)) {
-  if (found.every(({ zipped }) => zipped >= ZIPPED_TRIANGLES)) {
-    console.log('The doubled finger has already been removed from both hands. Nothing was changed.')
-    process.exit(0)
-  }
-  fail('no doubled finger was found on either hand. Nothing was changed.')
-}
-
-const places = mesh.points.map((point) => [...point])
-const touched = new Set()
-const seams = []
-SIDES.forEach(({ name, sign }, i) => {
-  if (found[i].notch < NOTCH_EDGES) return
-  console.log(`${name}: zipping the notch`)
-  const at = mirrored(places, sign)
-  const restNormals = summedNormals(handed(sign), at).map((sum) => scale(sum, 1 / (length(sum) || 1)))
-  const { moved, seam } = zipNotch(handed(sign), at, uvs, restNormals, console.log)
-  at.forEach(([x, y, z], point) => (places[point] = [x * sign, y, z]))
-  for (const point of moved) {
-    touched.add(point)
-    for (const other of mesh.neighbours[point]) touched.add(other)
-  }
-  seams.push(seam)
-})
-
-// Normals of everything touched, from the faces as they are now. Along the zipped line the points
-// of both sides lie together and share one shading, as if they were one surface.
-const sums = summedNormals(mesh, places)
-for (const seam of seams) {
-  const shared = seam.map((point) =>
-    seam.reduce((sum, other) => (distance(places[point], places[other]) < SEAM_RADIUS ? add(sum, sums[other]) : sum), [0, 0, 0]),
-  )
-  seam.forEach((point, i) => (sums[point] = shared[i]))
-}
-
-// Check the result before writing anything.
-const before = mesh.points
-SIDES.forEach(({ name, sign }, i) => {
-  const left = countNotchEdges(handed(sign), mirrored(places, sign))
-  if (left >= NOTCH_EDGES / 2) fail(`${name}: ${left} creased edges are left along the finger. Nothing was changed.`)
-  console.log(`${name}: ${found[i].notch} creased edges along the finger before, ${left} after`)
-})
 const bounds = (points) => [0, 1, 2].map((axis) => [Math.min(...points.map((p) => p[axis])), Math.max(...points.map((p) => p[axis]))])
-if (JSON.stringify(bounds(places.map((p) => p.map(Math.fround)))) !== JSON.stringify(bounds(before.map((p) => p.map(Math.fround))))) {
-  fail('the change would alter the size of the model. Nothing was changed.')
+
+/** The body as the file holds it at this moment. Both steps write into the file's bytes, so the second reads what the first has left. */
+function readMesh() {
+  const positions = readFloats(glb, where.position)
+  const mesh = weld(positions, indices)
+  /** The mesh to go with mirrored points: mirroring turns every triangle inside out, so its corners are taken the other way round. */
+  const handed = (sign) => (sign > 0 ? mesh : { ...mesh, triangles: mesh.triangles.map(([a, b, c]) => [a, c, b]) })
+  return { positions, normals: readFloats(glb, where.normal), uvs: readFloats(glb, where.uv), mesh, handed }
 }
 
-const changed = { position: [], normal: [], uv: [] }
-let furthest = 0
-for (const point of touched) {
-  const sum = sums[point]
-  const normal = length(sum) > 1e-12 ? scale(sum, 1 / length(sum)) : [0, 1, 0]
-  furthest = Math.max(furthest, distance(places[point], before[point]))
-  for (const copy of mesh.copies[point]) {
-    for (let axis = 0; axis < 3; axis++) {
-      if (Math.fround(places[point][axis]) !== Math.fround(positions[copy * 3 + axis])) {
-        positions[copy * 3 + axis] = places[point][axis]
-        changed.position.push(copy * 3 + axis)
+/** Step one: zips the notch of both hands shut. False if an earlier run has done so. */
+function removeFinger() {
+  const { positions, normals, uvs, mesh, handed } = readMesh()
+  console.log(`body: ${positions.length / 3} vertices on ${mesh.points.length} points, ${triangleCount} triangles`)
+  const found = SIDES.map(({ sign }) => {
+    const at = mirrored(mesh.points, sign)
+    return { notch: countNotchEdges(handed(sign), at), zipped: countZippedTriangles(handed(sign), at) }
+  })
+  SIDES.forEach(({ name }, i) => console.log(`${name}: ${found[i].notch} creased edges along the finger, ${found[i].zipped} collapsed triangles`))
+
+  if (found.every(({ notch }) => notch < NOTCH_EDGES)) {
+    if (found.every(({ zipped }) => zipped >= ZIPPED_TRIANGLES)) {
+      console.log('The doubled finger has already been removed from both hands.')
+      return false
+    }
+    fail('no doubled finger was found on either hand. Nothing was changed.')
+  }
+
+  const places = mesh.points.map((point) => [...point])
+  const touched = new Set()
+  const seams = []
+  SIDES.forEach(({ name, sign }, i) => {
+    if (found[i].notch < NOTCH_EDGES) return
+    console.log(`${name}: zipping the notch`)
+    const at = mirrored(places, sign)
+    const restNormals = summedNormals(handed(sign), at).map((sum) => scale(sum, 1 / (length(sum) || 1)))
+    const { moved, seam } = zipNotch(handed(sign), at, uvs, restNormals, console.log)
+    at.forEach(([x, y, z], point) => (places[point] = [x * sign, y, z]))
+    for (const point of moved) {
+      touched.add(point)
+      for (const other of mesh.neighbours[point]) touched.add(other)
+    }
+    seams.push(seam)
+  })
+
+  // Normals of everything touched, from the faces as they are now. Along the zipped line the points
+  // of both sides lie together and share one shading, as if they were one surface.
+  const sums = summedNormals(mesh, places)
+  for (const seam of seams) {
+    const shared = seam.map((point) =>
+      seam.reduce((sum, other) => (distance(places[point], places[other]) < SEAM_RADIUS ? add(sum, sums[other]) : sum), [0, 0, 0]),
+    )
+    seam.forEach((point, i) => (sums[point] = shared[i]))
+  }
+
+  // Check the result before writing anything.
+  const before = mesh.points
+  SIDES.forEach(({ name, sign }, i) => {
+    const left = countNotchEdges(handed(sign), mirrored(places, sign))
+    if (left >= NOTCH_EDGES / 2) fail(`${name}: ${left} creased edges are left along the finger. Nothing was changed.`)
+    console.log(`${name}: ${found[i].notch} creased edges along the finger before, ${left} after`)
+  })
+  if (JSON.stringify(bounds(places.map((p) => p.map(Math.fround)))) !== JSON.stringify(bounds(before.map((p) => p.map(Math.fround))))) {
+    fail('the change would alter the size of the model. Nothing was changed.')
+  }
+
+  const changed = { position: [], normal: [], uv: [] }
+  let furthest = 0
+  for (const point of touched) {
+    const sum = sums[point]
+    const normal = length(sum) > 1e-12 ? scale(sum, 1 / length(sum)) : [0, 1, 0]
+    furthest = Math.max(furthest, distance(places[point], before[point]))
+    for (const copy of mesh.copies[point]) {
+      for (let axis = 0; axis < 3; axis++) {
+        if (Math.fround(places[point][axis]) !== Math.fround(positions[copy * 3 + axis])) {
+          positions[copy * 3 + axis] = places[point][axis]
+          changed.position.push(copy * 3 + axis)
+        }
+        normals[copy * 3 + axis] = normal[axis]
+        changed.normal.push(copy * 3 + axis)
       }
-      normals[copy * 3 + axis] = normal[axis]
-      changed.normal.push(copy * 3 + axis)
     }
   }
+  const originalUvs = readFloats(glb, where.uv)
+  uvs.forEach((value, i) => {
+    if (Math.fround(value) !== Math.fround(originalUvs[i])) changed.uv.push(i)
+  })
+
+  writeFloats(glb, where.position, positions, changed.position)
+  writeFloats(glb, where.normal, normals, changed.normal)
+  writeFloats(glb, where.uv, uvs, changed.uv)
+
+  const movedCopies = new Set(changed.position.map((i) => Math.floor(i / 3))).size
+  console.log(`triangles: ${triangleCount} before, ${triangleCount} after (none removed; the small finger's side wall is collapsed)`)
+  console.log(`vertices moved: ${movedCopies} (by up to ${furthest.toFixed(4)}); normals rewritten: ${changed.normal.length / 3}; texture coordinates changed: ${new Set(changed.uv.map((i) => i >> 1)).size}`)
+  return true
 }
-const originalUvs = readFloats(glb, where.uv)
-uvs.forEach((value, i) => {
-  if (Math.fround(value) !== Math.fround(originalUvs[i])) changed.uv.push(i)
-})
 
-writeFloats(glb, where.position, positions, changed.position)
-writeFloats(glb, where.normal, normals, changed.normal)
-writeFloats(glb, where.uv, uvs, changed.uv)
+/** Step two: the shading round the pit at the knuckle end of each zipped line. False if an earlier run has done so. */
+function smoothKnuckles() {
+  const { normals, mesh, handed } = readMesh()
+  const changed = []
+  SIDES.forEach(({ name, sign }) => {
+    const storedNormal = (point) => {
+      const copies = mesh.copies[point].map((copy) => [normals[copy * 3] * sign, normals[copy * 3 + 1], normals[copy * 3 + 2]])
+      return { copies, mean: average(copies) }
+    }
+    const found = knuckleShading(handed(sign), mirrored(mesh.points, sign), storedNormal)
+    if (!found || found.inCore === 0) fail(`${name}: the knuckle end of the zipped line was not found. Nothing was changed.`)
+    const { shaded, inCore, settled } = found
+    if (settled === inCore) {
+      console.log(`${name}: the shading at the knuckle is smooth already`)
+      return
+    }
+    if (settled > 0) fail(`${name}: the shading at the knuckle is smooth at ${settled} of ${inCore} points, which no run of this script leaves. Nothing was changed.`)
+    let copies = 0
+    for (const { point, normal } of shaded) {
+      for (const copy of mesh.copies[point]) {
+        const before = changed.length
+        ;[normal[0] * sign, normal[1], normal[2]].forEach((value, axis) => {
+          if (Math.fround(value) === Math.fround(normals[copy * 3 + axis])) return
+          normals[copy * 3 + axis] = value
+          changed.push(copy * 3 + axis)
+        })
+        if (changed.length > before) copies++
+      }
+    }
+    const turned = Math.max(...shaded.map(({ turned }) => turned))
+    console.log(`${name}: shading at the knuckle smoothed over ${shaded.length} points (${copies} vertices), normals turned by up to ${turned.toFixed(1)} degrees`)
+  })
+  if (changed.length === 0) return false
+  // A model that states the range of its normals must still be right about it.
+  const { accessor } = accessorOf(glb, body.attributes.NORMAL, 'normals (NORMAL)')
+  if (accessor.min || accessor.max) {
+    const range = bounds(Array.from(mesh.pointOf, (_, copy) => [0, 1, 2].map((axis) => Math.fround(normals[copy * 3 + axis]))))
+    const differs = (stated, side) => stated && stated.some((value, axis) => Math.fround(value) !== range[axis][side])
+    if (differs(accessor.min, 0) || differs(accessor.max, 1)) fail('the normals would not have the range the model states for them. Nothing was changed.')
+  }
+  writeFloats(glb, where.normal, normals, changed)
+  return true
+}
+
+console.log(`${path}`)
+const removed = removeFinger()
+const smoothed = smoothKnuckles()
+if (!removed && !smoothed) {
+  console.log('Nothing was changed.')
+  process.exit(0)
+}
 writeFileSync(path, glb.file)
-
-const movedCopies = new Set(changed.position.map((i) => Math.floor(i / 3))).size
-console.log(`triangles: ${triangleCount} before, ${triangleCount} after (none removed; the small finger's side wall is collapsed)`)
-console.log(`vertices moved: ${movedCopies} (by up to ${furthest.toFixed(4)}); normals rewritten: ${changed.normal.length / 3}; texture coordinates changed: ${new Set(changed.uv.map((i) => i >> 1)).size}`)
 console.log(`file size: ${glb.file.length} bytes, unchanged`)
-console.log('The doubled finger has been removed from both hands.')
+// Said only now, not by step one: step two could still have refused, and then nothing would have been written.
+if (removed) console.log('The doubled finger has been removed from both hands.')
