@@ -6,6 +6,7 @@ import { ConeGeometry, Shape, TorusGeometry } from 'three'
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
 import { tokens } from '../../theme/tokens'
 import { extrudeRounded, roundedCylinder } from '../geometry'
+import { LAPTOP_SIZE } from '../layout'
 import { glossy, matte } from '../materials'
 
 // --- Lamp -------------------------------------------------------------------
@@ -73,26 +74,9 @@ export function CoffeeCup(props: GroupProps) {
 // --- Laptop -----------------------------------------------------------------
 
 /**
- * Wide and tall enough for its lid to hide both of the character's hands on
- * the keys from the camera, wherever the pointer has taken the camera.
- */
-const LAPTOP = {
-  width: 0.55,
-  depth: 0.352,
-  baseHeight: 0.02,
-  lidHeight: 0.33,
-  lidThickness: 0.014,
-  corner: 0.006,
-  /** How far the open lid leans back from vertical, in radians. */
-  lidLean: 0.26,
-  bezel: 0.02,
-  /** The keys lie this far above the base, so that the two do not flicker. */
-  keysLift: 0.0005,
-} as const
-
-/**
  * Open gray laptop. Origin: centre of its base on the desktop. The keyboard
- * and screen face -z (the seat); the back of the lid faces +z.
+ * and screen face -z (the seat); the back of the lid faces +z. Its measures
+ * are in `layout.ts` (`LAPTOP_SIZE`), because the character is fitted to them.
  */
 export function Laptop(props: GroupProps) {
   const shell = matte(tokens.laptopGray)
@@ -100,37 +84,37 @@ export function Laptop(props: GroupProps) {
   return (
     <group {...props}>
       <RoundedBox
-        args={[LAPTOP.width, LAPTOP.baseHeight, LAPTOP.depth]}
-        radius={LAPTOP.corner}
+        args={[LAPTOP_SIZE.width, LAPTOP_SIZE.baseHeight, LAPTOP_SIZE.depth]}
+        radius={LAPTOP_SIZE.corner}
         material={shell}
-        position={[0, LAPTOP.baseHeight / 2, 0]}
+        position={[0, LAPTOP_SIZE.baseHeight / 2, 0]}
         castShadow
         receiveShadow
       />
       <mesh
         material={dark}
-        position={[0, LAPTOP.baseHeight + LAPTOP.keysLift, -LAPTOP.depth * 0.12]}
+        position={[0, LAPTOP_SIZE.baseHeight + LAPTOP_SIZE.keysLift, -LAPTOP_SIZE.depth * 0.12]}
         rotation={[-Math.PI / 2, 0, 0]}
       >
-        <planeGeometry args={[LAPTOP.width - LAPTOP.bezel * 4, LAPTOP.depth * 0.5]} />
+        <planeGeometry args={[LAPTOP_SIZE.width - LAPTOP_SIZE.bezel * 4, LAPTOP_SIZE.depth * 0.5]} />
       </mesh>
       <group
-        position={[0, LAPTOP.baseHeight, LAPTOP.depth / 2 - LAPTOP.lidThickness / 2]}
-        rotation={[LAPTOP.lidLean, 0, 0]}
+        position={[0, LAPTOP_SIZE.baseHeight, LAPTOP_SIZE.depth / 2 - LAPTOP_SIZE.lidThickness / 2]}
+        rotation={[LAPTOP_SIZE.lidLean, 0, 0]}
       >
         <RoundedBox
-          args={[LAPTOP.width, LAPTOP.lidHeight, LAPTOP.lidThickness]}
-          radius={LAPTOP.corner}
+          args={[LAPTOP_SIZE.width, LAPTOP_SIZE.lidHeight, LAPTOP_SIZE.lidThickness]}
+          radius={LAPTOP_SIZE.corner}
           material={shell}
-          position={[0, LAPTOP.lidHeight / 2, 0]}
+          position={[0, LAPTOP_SIZE.lidHeight / 2, 0]}
           castShadow
         />
         <mesh
           material={dark}
-          position={[0, LAPTOP.lidHeight / 2, -LAPTOP.lidThickness / 2 - 0.0005]}
+          position={[0, LAPTOP_SIZE.lidHeight / 2, -LAPTOP_SIZE.lidThickness / 2 - 0.0005]}
           rotation={[0, Math.PI, 0]}
         >
-          <planeGeometry args={[LAPTOP.width - LAPTOP.bezel * 2, LAPTOP.lidHeight - LAPTOP.bezel * 2]} />
+          <planeGeometry args={[LAPTOP_SIZE.width - LAPTOP_SIZE.bezel * 2, LAPTOP_SIZE.lidHeight - LAPTOP_SIZE.bezel * 2]} />
         </mesh>
       </group>
     </group>

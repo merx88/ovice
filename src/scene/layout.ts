@@ -99,6 +99,32 @@ export const WALK_CORNER_RADIUS = 0.5
  */
 export const LAPTOP_POS = [SEAT_X, DESK_TOP_Y, -0.21] as const
 
+/**
+ * The laptop's measures. Wide and tall enough for its lid to hide both of the
+ * character's hands on the keys from the camera, wherever the pointer has
+ * taken the camera.
+ *
+ * The character is fitted to them: the hands that rest on the keys and hover
+ * over them (`ARM_ON_KEYS`, `ARM_OVER_KEYS` in `character/clips/shared.ts`),
+ * the sip's arm poses, which lift the hand clear of the laptop on the way to
+ * the cup and back (`character/clips/sip.ts`), and the cup itself, which
+ * stands beside the laptop where that reach ends (`CUP_POS`). Change a
+ * measure and those have to be fitted again.
+ */
+export const LAPTOP_SIZE = {
+  width: 0.55,
+  depth: 0.352,
+  baseHeight: 0.02,
+  lidHeight: 0.33,
+  lidThickness: 0.014,
+  corner: 0.006,
+  /** How far the open lid leans back from vertical, in radians. */
+  lidLean: 0.26,
+  bezel: 0.02,
+  /** The keys lie this far above the base, so that the two do not flicker. */
+  keysLift: 0.0005,
+} as const
+
 // --- Furniture and props ----------------------------------------------------
 
 export const WALL_Z = -1.8
