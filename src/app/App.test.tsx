@@ -1,8 +1,10 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { Children, isValidElement, type ReactNode } from 'react'
+import { Children, forwardRef, isValidElement, type ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cancelActive } from '../agent/orchestrator'
+import { EMPTY_OFFICE_LABEL, sceneLabel } from '../character/sceneLabel'
+import { useCharacterSignals, type CharacterSignals } from '../store/characterSignals'
 import { useTasks } from '../store/tasks'
 import { App } from './App'
 
@@ -10,12 +12,17 @@ const scene = vi.hoisted(() => ({ fails: false }))
 
 // The renderer and the 3D scene need WebGL; stand-ins are enough to see what the app puts where.
 vi.mock('@react-three/fiber', () => ({
-  // Renders the components inside the canvas, leaving out three.js elements such as <color>.
-  Canvas: ({ children }: { children: ReactNode }) => (
-    <div data-testid="canvas">
-      {Children.toArray(children).filter((child) => isValidElement(child) && typeof child.type !== 'string')}
-    </div>
-  ),
+  // Renders the components inside the canvas, leaving out three.js elements such as <color>, beside a
+  // <canvas> of its own. As with the real one, a ref to it is that <canvas>, and whatever the scene puts
+  // into the page (the folder's button, the speech bubble) is beside the <canvas>, not inside it.
+  Canvas: forwardRef<HTMLCanvasElement, { children: ReactNode }>(function Canvas({ children }, ref) {
+    return (
+      <div data-testid="canvas">
+        <canvas ref={ref} />
+        {Children.toArray(children).filter((child) => isValidElement(child) && typeof child.type !== 'string')}
+      </div>
+    )
+  }),
 }))
 vi.mock('../scene/OfficeScene', () => ({
   OfficeScene: () => {
@@ -30,10 +37,19 @@ function stubWebGL(available: boolean) {
     available ? {} : null) as unknown as HTMLCanvasElement['getContext'])
 }
 
+/** What the signals hold while no character is in the picture. */
+const NOBODY: CharacterSignals = { bubble: [], badge: 'idle', charState: 'resting', place: 'desk', present: false }
+
+/** The character lets the interface know about itself, as its driver does. */
+function characterIs(signals: Partial<CharacterSignals>) {
+  act(() => useCharacterSignals.getState().publish({ ...NOBODY, present: true, ...signals }))
+}
+
 describe('App', () => {
   beforeEach(() => {
     localStorage.clear()
     useTasks.setState({ tasks: [], activeId: null, viewingId: null })
+    useCharacterSignals.getState().publish(NOBODY)
   })
 
   afterEach(() => {
@@ -107,5 +123,73 @@ describe('App', () => {
     render(<App />)
     expect(screen.getByRole('alert')).toHaveTextContent('3D 화면을 불러오지 못했어요')
     expect(screen.queryByTestId('canvas')).not.toBeInTheDocument()
+  })
+
+  describe('the picture of the office', () => {
+    const picture = () => screen.getByRole('img')
+
+    it('is the canvas itself, described as an office its character has not appeared in yet', () => {
+      stubWebGL(true)
+      render(<App />)
+      expect(picture().tagName).toBe('CANVAS')
+      expect(picture()).toHaveAccessibleName(EMPTY_OFFICE_LABEL)
+    })
+
+    it('says what the character is doing and where, once it is there, and keeps up with it', () => {
+      stubWebGL(true)
+      render(<App />)
+      characterIs({ charState: 'resting', place: 'desk' })
+      expect(picture()).toHaveAccessibleName(sceneLabel('resting', 'desk'))
+      characterIs({ charState: 'goingToSofa', place: 'desk' })
+      expect(picture()).toHaveAccessibleName(sceneLabel('goingToSofa', 'desk'))
+      characterIs({ charState: 'resting', place: 'sofa' })
+      expect(picture()).toHaveAccessibleName('3D 사무실의 캐릭터가 소파에 앉아 쉬고 있어요.')
+      characterIs({ charState: 'rushingToDesk', place: 'desk', badge: 'thinking' })
+      expect(picture()).toHaveAccessibleName(sceneLabel('rushingToDesk', 'desk'))
+      characterIs({ charState: 'working', place: 'desk', badge: 'working', bubble: ['Writing up the report...'] })
+      expect(picture()).toHaveAccessibleName('3D 사무실의 캐릭터가 책상에서 일하고 있어요.')
+      expect(screen.getAllByRole('img')).toHaveLength(1)
+    })
+
+    it('says nothing of a character that is gone again', () => {
+      stubWebGL(true)
+      render(<App />)
+      characterIs({ charState: 'handingFile' })
+      expect(picture()).toHaveAccessibleName(sceneLabel('handingFile', 'desk'))
+      act(() => useCharacterSignals.getState().publish(NOBODY))
+      expect(picture()).toHaveAccessibleName(EMPTY_OFFICE_LABEL)
+    })
+
+    it('is no live region: what the character says is announced by its speech bubble', () => {
+      stubWebGL(true)
+      render(<App />)
+      characterIs({ charState: 'working' })
+      expect(picture()).not.toHaveAttribute('aria-live')
+      expect(picture().closest('[aria-live], [role="status"], [role="alert"]')).toBeNull()
+    })
+
+    it('holds nothing: what the scene puts into the page stays beside the picture, where assistive technology finds it', () => {
+      stubWebGL(true)
+      render(<App />)
+      expect(picture()).toBeEmptyDOMElement()
+      // The stand-in for the scene's own content is in the canvas's element, and not inside the image.
+      expect(screen.getByTestId('canvas')).toHaveTextContent('office')
+      expect(screen.getByTestId('canvas')).not.toHaveAttribute('role')
+      expect(picture()).not.toHaveTextContent('office')
+    })
+
+    it.each([
+      ['WebGL is unavailable', false],
+      ['the scene fails', true],
+    ])('is not there where %s: there is no picture, and the notice says so itself', (_, fails) => {
+      stubWebGL(fails)
+      if (fails) vi.spyOn(console, 'error').mockImplementation(() => {})
+      scene.fails = fails
+      render(<App />)
+      // Even if the signals said a character was at work.
+      characterIs({ charState: 'working' })
+      expect(screen.queryByRole('img')).not.toBeInTheDocument()
+      expect(screen.getByRole('alert')).toHaveTextContent('3D 화면을 불러오지 못했어요')
+    })
   })
 })

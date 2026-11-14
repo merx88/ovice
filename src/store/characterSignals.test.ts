@@ -9,6 +9,8 @@ import {
   useBadge,
   useBubble,
   useBubbleAnchor,
+  useCharacterPlace,
+  useCharacterPresent,
   useCharacterSignals,
   useCharState,
   type CharacterSignals,
@@ -119,6 +121,8 @@ describe('the hooks for the interface', () => {
     expect(renderHook(() => useBubble()).result.current).toEqual(HANDING_OVER.bubble)
     expect(renderHook(() => useBadge()).result.current).toBe('done')
     expect(renderHook(() => useCharState()).result.current).toBe('handingFile')
+    expect(renderHook(() => useCharacterPlace()).result.current).toBe('desk')
+    expect(renderHook(() => useCharacterPresent()).result.current).toBe(true)
     expect(renderHook(() => useBubbleAnchor()).result.current).toBe(useCharacterSignals.getState().bubbleAnchor)
 
     useCharacterSignals.getState().publish(NOBODY)
@@ -129,7 +133,7 @@ describe('the hooks for the interface', () => {
     let renders = 0
     renderHook(() => {
       renders++
-      return [useBubble(), useBadge(), useCharState(), useBubbleAnchor()]
+      return [useBubble(), useBadge(), useCharState(), useCharacterPlace(), useCharacterPresent(), useBubbleAnchor()]
     })
     const before = renders
 

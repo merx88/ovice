@@ -85,5 +85,11 @@ export const useBadge = (): BadgeStatus => useCharacterSignals((state) => state.
 /** What the character is doing; renders again only when it changes. */
 export const useCharState = (): CharState => useCharacterSignals((state) => state.charState)
 
+/** Where the character waits, at its desk or on the sofa; renders again only when it changes. */
+export const useCharacterPlace = (): Place => useCharacterSignals((state) => state.place)
+
+/** Whether the character is in the picture; renders again only when it changes. */
+export const useCharacterPresent = (): boolean => useCharacterSignals((state) => state.present)
+
 /** The bubble's anchor: always the same object, to be read inside a frame callback (see `BubbleAnchor`). */
 export const useBubbleAnchor = (): BubbleAnchor => useCharacterSignals((state) => state.bubbleAnchor)
