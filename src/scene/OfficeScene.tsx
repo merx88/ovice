@@ -137,11 +137,11 @@ const clipReview = import.meta.env.DEV ? parseClipReview(window.location.search)
  *
  * Rendered by React once. It takes no props, and `memo` keeps a render of
  * whatever holds it (the canvas, which renders again for every new size of
- * the window) from going through it: some of its parts make new render
- * targets and draw into them again whenever they are rendered, among them the
- * floor's reflection and the contact shadows. What moves in it moves in frame
- * callbacks, and what changes in it renders on its own (the character, its
- * speech bubble).
+ * the window) from going through it: some of its parts draw what they have
+ * drawn once again whenever they are rendered, the floor's reflection into
+ * new render targets, the studio's light into its six faces. What moves in it
+ * moves in frame callbacks, and what changes in it renders on its own (the
+ * character, its speech bubble).
  */
 export const OfficeScene = memo(function OfficeScene() {
   return (

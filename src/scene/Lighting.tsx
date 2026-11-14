@@ -1,4 +1,4 @@
-import { ContactShadows, Environment, Lightformer } from '@react-three/drei'
+import { Environment, Lightformer } from '@react-three/drei'
 import { BackSide, Color } from 'three'
 import { tokens } from '../theme/tokens'
 import type { Vec3 } from './layout'
@@ -57,16 +57,10 @@ const STUDIO_PANELS: readonly StudioPanel[] = [
   { color: tokens.black, intensity: 1, position: [5, 2, 16], size: [0.8, 12] },
 ]
 
-// --- Contact shadows --------------------------------------------------------
-
-/** Footprint (m) the contact shadows cover and how high above the floor they look. */
-const CONTACT = { width: 7, depth: 4, centerZ: -0.4, height: 0.9, lift: 0.004, opacity: 0.6, blur: 2.2 } as const
-
 /**
- * Image-based light from a studio built out of panels (nothing to download),
- * a key light that casts soft shadows, and contact shadows that ground every
- * piece. The studio and the contact shadows are rendered once, as the
- * furniture does not move.
+ * Image-based light from a studio built out of panels (nothing to download)
+ * and a key light that casts soft shadows. The studio is rendered once, as
+ * the furniture does not move.
  */
 export function Lighting() {
   return (
@@ -112,17 +106,6 @@ export function Lighting() {
         />
       </directionalLight>
       <directionalLight position={[...RIM_LIGHT.position]} intensity={RIM_LIGHT.intensity} />
-
-      <ContactShadows
-        position={[0, CONTACT.lift, CONTACT.centerZ]}
-        scale={[CONTACT.width, CONTACT.depth]}
-        far={CONTACT.height}
-        resolution={512}
-        blur={CONTACT.blur}
-        opacity={CONTACT.opacity}
-        color={tokens.black}
-        frames={1}
-      />
     </>
   )
 }
