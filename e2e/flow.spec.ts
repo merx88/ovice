@@ -178,5 +178,9 @@ test.describe('after a reload', () => {
     // The folder is a button, so the keyboard opens it too.
     await folder(page).press('Enter')
     await expect(viewer(page)).toHaveAccessibleName(second)
+    // Closed from the keyboard, the viewer leaves the focus in the prompt field: the folder has gone with the hand-over.
+    await page.keyboard.press('Escape')
+    await expect(viewer(page)).toHaveCount(0)
+    await expect(promptField(page)).toBeFocused()
   })
 })

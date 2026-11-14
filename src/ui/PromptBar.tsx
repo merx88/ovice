@@ -43,6 +43,18 @@ function hasCoarsePointer(): boolean {
 }
 
 /**
+ * Gives the keyboard's focus to the prompt field, for a part of the page that
+ * goes away while it has the focus (the folder the character holds out):
+ * without this, the focus would fall back to the top of the page. Not on a
+ * device whose pointer is a finger, where it would call up the on-screen
+ * keyboard.
+ */
+export function focusPromptField(): void {
+  if (hasCoarsePointer()) return
+  document.querySelector<HTMLElement>(`.prompt ${FOCUS_TARGET}`)?.focus({ preventScroll: true })
+}
+
+/**
  * Tells whoever watches the chat (the character) that it is being used. Only
  * the field counts: its focus, a press on it and every change of its text.
  */

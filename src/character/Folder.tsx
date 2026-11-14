@@ -1,10 +1,11 @@
 import { Html } from '@react-three/drei'
 import { useFrame, type ThreeEvent } from '@react-three/fiber'
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, type CSSProperties } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, type CSSProperties } from 'react'
 import { Vector3, type Group } from 'three'
 import { extrudeRounded, roundedRectShape } from '../scene/geometry'
 import { glossy, matte } from '../scene/materials'
 import { tokens } from '../theme/tokens'
+import { focusPromptField } from '../ui/PromptBar'
 
 export interface FolderProps {
   /** Called when the folder is clicked, in 3D or through its button. */
@@ -81,11 +82,21 @@ export const Folder = forwardRef<Group, FolderProps>(function Folder({ onClick }
   const coverZ = (DEPTH - COVER.thickness) / 2
   const group = useRef<Group>(null)
   const button = useRef<Group>(null)
+  const hit = useRef<HTMLButtonElement>(null)
   /** Where the button is held, in the space the folder is moved in. */
   const buttonAt = useMemo(() => new Vector3(Infinity, Infinity, Infinity), [])
 
   useImperativeHandle(ref, () => group.current as Group, [])
   useEffect(() => () => showHandCursor(false), [])
+  // The button goes with the folder when the hand-over ends. If it has the keyboard's focus then (the
+  // viewer it opened has just been closed and handed the focus back to it), the prompt field takes the
+  // focus instead of the top of the page. This runs before <Html> takes the button out of the page.
+  useLayoutEffect(
+    () => () => {
+      if (hit.current !== null && document.activeElement === hit.current) focusPromptField()
+    },
+    [],
+  )
 
   useFrame(() => {
     if (!group.current || !button.current) return
@@ -133,6 +144,7 @@ export const Folder = forwardRef<Group, FolderProps>(function Folder({ onClick }
           rotation={[TILT, 0, 0]}
         >
           <button
+            ref={hit}
             type="button"
             data-testid="folder-hit"
             aria-label="결과 파일 열기"

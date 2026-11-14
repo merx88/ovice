@@ -5,7 +5,7 @@ import { cancelActive, retry, startTask } from '../agent/orchestrator'
 import { useChatActivity } from '../store/chatActivity'
 import { useTasks, type Task } from '../store/tasks'
 import { ComingSoon } from './ComingSoon'
-import { PromptBar } from './PromptBar'
+import { focusPromptField, PromptBar } from './PromptBar'
 
 vi.mock('../agent/orchestrator', () => ({ startTask: vi.fn(), cancelActive: vi.fn(), retry: vi.fn() }))
 
@@ -404,6 +404,20 @@ describe('PromptBar: where the keyboard is after the bar changes', () => {
     await userEvent.type(field(), 'compare three laptops{Enter}')
     act(() => tasks().update(tasks().activeId!, { status: 'failed' }))
     expect(screen.getByRole('group', { name: '실패한 작업' })).toHaveFocus()
+  })
+
+  it('takes the focus in the field when a part of the page that had it goes away', () => {
+    pointer('fine')
+    render(<PromptBar />)
+    act(() => focusPromptField())
+    expect(field()).toHaveFocus()
+  })
+
+  it('leaves the focus be on a touch device then: the field would call up the on-screen keyboard', () => {
+    pointer('coarse')
+    render(<PromptBar />)
+    act(() => focusPromptField())
+    expect(field()).not.toHaveFocus()
   })
 })
 
