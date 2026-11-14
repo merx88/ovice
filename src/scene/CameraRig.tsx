@@ -2,10 +2,8 @@ import { useFrame } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import { PerspectiveCamera } from 'three'
 import { useSettings } from '../store/settings'
-import { cameraFor, fovForAspect, type CameraSpec } from './layout'
+import { cameraFor, fovForAspect, PARALLAX_RANGE, type CameraSpec } from './layout'
 
-/** How far (m) the camera drifts towards the pointer on each axis. */
-const PARALLAX_RANGE = 0.15
 /** How quickly the camera catches up with the pointer (1/s). */
 const PARALLAX_EASE = 3
 

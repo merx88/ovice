@@ -2,7 +2,7 @@ import type { GroupProps } from '@react-three/fiber'
 import { CylinderGeometry } from 'three'
 import { tokens } from '../../theme/tokens'
 import { extrudeRounded, flatRing, roundedLoopPoints, roundedRectShape, tubeThrough } from '../geometry'
-import { SEAT_HEIGHT } from '../layout'
+import { CHAIR_BACK, SEAT_HEIGHT } from '../layout'
 import { glossy } from '../materials'
 
 const SEAT = { width: 0.84, depth: 0.7, thickness: 0.1, corner: 0.18, edge: 0.045 } as const
@@ -23,9 +23,9 @@ const LEG = {
 
 /** The bullseye backrest: two flat rings, the outer one on a pair of posts. */
 const BACK = {
-  z: -0.32,
-  centerY: 0.84,
-  outerRing: { inner: 0.215, outer: 0.325 },
+  z: CHAIR_BACK.z,
+  centerY: CHAIR_BACK.centerY,
+  outerRing: { inner: 0.215, outer: CHAIR_BACK.radius },
   innerRing: { inner: 0.052, outer: 0.16 },
   thickness: 0.07,
   edge: 0.02,

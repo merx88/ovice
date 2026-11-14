@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest'
+import { holdFile } from '../character/clips/holdFile'
 import { measurePath, roundCorners, samplePath } from '../character/path'
+import { BADGE_ABOVE_HEAD, FLOAT, raiseFor, SYMBOL_SIZE } from '../character/statusSymbols'
 import {
   BOOKSHELF_POS,
   BOOKSHELF_SIZE,
   BOOKSHELF_YAW,
   CAMERA,
   CAMERA_MOBILE,
+  CHAIR_BACK,
   CHAIR_POS,
   CHARACTER_BODY_RADIUS,
   CHARACTER_HEIGHT,
@@ -19,6 +22,7 @@ import {
   HANDOFF_FACING,
   HANDOFF_POS,
   LAPTOP_POS,
+  PARALLAX_RANGE,
   SEAT_FACING,
   SEAT_GROUND_POS,
   SEAT_POS,
@@ -282,6 +286,57 @@ describe('the walk from the seat to the hand-off spot', () => {
   it('hands the file over facing the camera', () => {
     const towardsCameraZ = Math.sign(CAMERA.position[Z] - HANDOFF_POS[Z])
     expect(Math.cos(HANDOFF_FACING) * towardsCameraZ).toBeCloseTo(1)
+  })
+})
+
+describe('the ring above the character holding out the file', () => {
+  /**
+   * The head bone of the standing character above the floor: 0.4941 of the
+   * model's 0.7896 units of height (measured on the model). It is right above
+   * the point the character stands on, and the hand-over's bob takes the
+   * whole body up and down a little.
+   */
+  const HEAD_HEIGHT = CHARACTER_HEIGHT * (0.4941 / 0.7896)
+  const BOB = Math.max(...Array.from({ length: 401 }, (_, i) => -(holdFile.sample(i / 100)['root 1']?.pos?.[Y] ?? 0)))
+  /** The ring at its lowest, where the bob and its own drift take it, and how far it reaches round its middle. */
+  const ring = {
+    centre: [HANDOFF_POS[X], HEAD_HEIGHT - BOB + BADGE_ABOVE_HEAD + raiseFor('done') - FLOAT.height, HANDOFF_POS[Z]],
+    radius: SYMBOL_SIZE / 2,
+  } as const
+  /** The outer ring of the chair's back, behind the desk. */
+  const back = { centre: [CHAIR_POS[X], CHAIR_BACK.centerY, CHAIR_POS[Z] + CHAIR_BACK.z], radius: CHAIR_BACK.radius } as const
+
+  /**
+   * How much wall shows between the ring and the chair's back (m) to an eye
+   * at `eye`, measured on the upright plane through the ring. Both are taken
+   * as flat discs facing the camera (the ring's depth and lean and the
+   * thickness of the chair's back make a millimetre or two of difference), so
+   * this is the distance between two circles once the chair's back is
+   * projected onto that plane from the eye.
+   */
+  function wallBetween(eye: Vec3): number {
+    const scale = (eye[Z] - ring.centre[Z]) / (eye[Z] - back.centre[Z])
+    const x = eye[X] + (back.centre[X] - eye[X]) * scale
+    const y = eye[Y] + (back.centre[Y] - eye[Y]) * scale
+    return Math.hypot(ring.centre[X] - x, ring.centre[Y] - y) - ring.radius - back.radius * scale
+  }
+
+  it('shows at least 5 cm of wall between itself and the chair behind, from either camera, wherever the pointer draws it', () => {
+    expect(BOB).toBeGreaterThan(0)
+    /** Every centimetre of the way the camera drifts towards the pointer, on each axis. */
+    const drifts = Array.from({ length: 31 }, (_, i) => PARALLAX_RANGE * (i / 15 - 1))
+    for (const [name, camera] of [
+      ['desktop', CAMERA],
+      ['phone', CAMERA_MOBILE],
+    ] as const) {
+      let least = Infinity
+      for (const right of drifts) {
+        for (const up of drifts) {
+          least = Math.min(least, wallBetween([camera.position[X] + right, camera.position[Y] + up, camera.position[Z]]))
+        }
+      }
+      expect(least, `the least wall seen from the ${name} camera`).toBeGreaterThanOrEqual(0.05)
+    }
   })
 })
 

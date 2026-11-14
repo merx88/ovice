@@ -57,6 +57,14 @@ const CHAIR_BEHIND_SEAT = 0.42
 
 export const CHAIR_POS = [SEAT_X, 0, SEAT_POS[2] - CHAIR_BEHIND_SEAT] as const
 
+/**
+ * The chair's bullseye backrest: how far behind the chair's middle it stands,
+ * the height of its middle and the radius of its outer ring. The top of it is
+ * what the symbol above a character at the hand-off spot has to stay clear
+ * of, as the cameras see the two.
+ */
+export const CHAIR_BACK = { z: -0.32, centerY: 0.84, radius: 0.325 } as const
+
 /** Yaw (radians, about +y) of the seated character: 0 faces +z, the camera. */
 export const SEAT_FACING = 0
 
@@ -200,6 +208,9 @@ export const CAMERA_MOBILE: CameraSpec = {
 export function cameraFor(viewportWidth: number): CameraSpec {
   return viewportWidth < MOBILE_BREAKPOINT ? CAMERA_MOBILE : CAMERA
 }
+
+/** How far (m) the camera drifts from its position towards the pointer, on each axis. */
+export const PARALLAX_RANGE = 0.15
 
 /**
  * Vertical fov (degrees) to use at `aspect`: the designed fov, widened on

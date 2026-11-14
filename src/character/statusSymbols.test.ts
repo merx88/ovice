@@ -3,10 +3,12 @@ import { describe, expect, it } from 'vitest'
 import { tokens } from '../theme/tokens'
 import {
   colorFor,
+  DONE_LIFT,
   exclamationSymbol,
   FLOAT,
   LEAN,
   POP,
+  raiseFor,
   ringSymbol,
   SWAY,
   symbolFor,
@@ -406,5 +408,17 @@ describe('symbolPose', () => {
         expect(symbolPose(time, sinceChange, true)).toEqual({ turn: SWAY.rest, lift: 0, scale: 1 })
       }
     }
+  })
+})
+
+describe('raiseFor', () => {
+  it('floats the ring that says a result is ready higher, by about twelve centimetres', () => {
+    expect(raiseFor('done')).toBe(DONE_LIFT)
+    expect(DONE_LIFT).toBeGreaterThan(0.1)
+    expect(DONE_LIFT).toBeLessThan(0.15)
+  })
+
+  it.each<BadgeStatus>(['idle', 'thinking', 'working', 'error', 'hidden'])('leaves the symbol for %s where it was', (status) => {
+    expect(raiseFor(status)).toBe(0)
   })
 })

@@ -316,3 +316,23 @@ export function symbolPose(time: number, sinceChange: number, still: boolean): S
     scale: 1 + POP.swell * Math.sin(progress * Math.PI) * (1 - progress),
   }
 }
+
+// --- Where it floats -----------------------------------------------------------
+
+/** A symbol floats this far (m) above the character's head bone, clear of the hood. */
+export const BADGE_ABOVE_HEAD = 0.66
+
+/**
+ * The ring that says a result is ready floats this much higher (m). The
+ * character holds the result out in front of its desk then, with its chair
+ * behind it, and seen from the cameras' height a ring at the usual height
+ * would sit on the top of the chair's back. This much higher, at least 5 cm of
+ * wall shows between the two from either camera, however far it has drifted
+ * towards the pointer (see `layout.test.ts`).
+ */
+export const DONE_LIFT = 0.12
+
+/** How much higher (m) than `BADGE_ABOVE_HEAD` the symbol for `status` floats. */
+export function raiseFor(status: BadgeStatus): number {
+  return status === 'done' ? DONE_LIFT : 0
+}

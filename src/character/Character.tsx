@@ -15,6 +15,7 @@ import {
   type Mesh,
 } from 'three'
 import type { Vec3 } from '../scene/layout'
+import { useSettings } from '../store/settings'
 import { tokens } from '../theme/tokens'
 import { carryOver, rootReach } from './carryOver'
 import { CLIPS, resolveClip, type ClipName } from './clips'
@@ -26,7 +27,7 @@ import { computeLookPitch, computeLookYaw, damp, lookAngles } from './lookAt'
 import { advancePlayback, createPlayback, MAX_STEP } from './playback'
 import { applyPose, applyRest, createRig, MODEL_URL, setEyeOpenness, turnBone, type Rig } from './rig'
 import { StatusBadge } from './StatusBadge'
-import type { BadgeStatus } from './statusSymbols'
+import { BADGE_ABOVE_HEAD, raiseFor, type BadgeStatus } from './statusSymbols'
 
 /** Where the character is and which way it faces. */
 export interface CharacterPlacement {
@@ -69,10 +70,10 @@ export interface CharacterProps {
 export const POSE_PRIORITY = -0.5
 /** How quickly head and body turn towards the look target (1/s). */
 const LOOK_RATE = 8
+/** How quickly the badge glides to the height its status floats at (1/s); with reduced motion it is there at once. */
+const BADGE_RAISE_RATE = 5
 /** The eyes close for this long (s), at random intervals within this range (s). */
 const BLINK = { duration: 0.16, minGap: 2, maxGap: 6, closed: 0.08 } as const
-/** The badge floats this far (m) above the head bone, clear of the hood. */
-const BADGE_ABOVE_HEAD = 0.66
 /** The palm, as a distance (model units) from the hand bone along the hand. */
 const PALM_ALONG_HAND = 0.07
 /** Where the folder sits relative to the point midway between the palms (m, character space). */
@@ -177,6 +178,8 @@ export function Character(props: CharacterProps) {
       placed: null as { position: [number, number, number]; facing: number } | null,
       reach: 0,
       head: new Vector3(),
+      /** How far above its usual place the badge floats, on its way to where its status has it (see `raiseFor`). */
+      badgeRaise: 0,
       blink: { untilNext: BLINK.minGap as number, elapsed: BLINK.duration as number },
     }),
     [rig],
@@ -319,7 +322,9 @@ export function Character(props: CharacterProps) {
 
     // --- The things that follow the body ------------------------------------
     rig.byName.head.bone.getWorldPosition(state.head)
-    badgeAnchor.current?.position.copy(state.head).setY(state.head.y + BADGE_ABOVE_HEAD)
+    const raise = raiseFor(latest.current.badge)
+    state.badgeRaise = useSettings.getState().reduceMotion ? raise : damp(state.badgeRaise, raise, BADGE_RAISE_RATE, step)
+    badgeAnchor.current?.position.copy(state.head).setY(state.head.y + BADGE_ABOVE_HEAD + state.badgeRaise)
     shadow.current?.position.set(position[0], GROUND_SHADOW.lift, position[2])
     if (folder.current) {
       folder.current.visible = fadeWeight >= FOLDER_SHOWS_FROM
