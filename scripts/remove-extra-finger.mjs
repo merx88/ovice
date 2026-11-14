@@ -22,9 +22,11 @@
 // remain, collapsed to nothing along the zipped line.
 //
 // Exit code 0: the finger was removed, or an earlier run had already removed
-// it (the file is then left untouched). Exit code 1: no doubled finger and no
-// trace of this repair was found, or the result did not pass its own check;
-// nothing is written.
+// it (the file is then left untouched). Exit code 1, with a sentence that says
+// why: the file is not a model this script can read (no binary glTF, no
+// meshes, a body without normals or texture coordinates), no doubled finger
+// and no trace of this repair was found, or the result did not pass its own
+// check. Nothing is written then.
 import { readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
@@ -88,23 +90,44 @@ function fail(message) {
 }
 
 function readGlb(path) {
-  const file = readFileSync(path)
-  if (file.readUInt32LE(0) !== GLB_MAGIC || file.readUInt32LE(4) !== 2) fail(`${path} is not a binary glTF 2 file`)
+  let file
+  try {
+    file = readFileSync(path)
+  } catch (error) {
+    fail(`${path} cannot be read (${error.code ?? error.message})`)
+  }
+  // A header of 12 bytes and the 8 bytes that head the first chunk.
+  if (file.length < 20 || file.readUInt32LE(0) !== GLB_MAGIC || file.readUInt32LE(4) !== 2) fail(`${path} is not a binary glTF 2 file`)
   const jsonLength = file.readUInt32LE(12)
   if (file.readUInt32LE(16) !== CHUNK_JSON) fail('the first chunk is not JSON')
-  const json = JSON.parse(file.subarray(20, 20 + jsonLength).toString('utf8'))
   const binHeader = 20 + jsonLength
+  if (file.length < binHeader + 8) fail('the file ends before its binary chunk')
+  let json
+  try {
+    json = JSON.parse(file.subarray(20, binHeader).toString('utf8'))
+  } catch (error) {
+    fail(`the JSON chunk cannot be read (${error.message})`)
+  }
   if (file.readUInt32LE(binHeader + 4) !== CHUNK_BIN) fail('the second chunk is not binary')
   return { file, json, binStart: binHeader + 8 }
 }
 
+/** The accessor `index` and the view of the buffer it reads, for `what` (the body's positions, say). */
+function accessorOf({ json }, index, what) {
+  if (index === undefined) fail(`the body has no ${what}`)
+  const accessor = json.accessors?.[index]
+  if (!accessor) fail(`the body's ${what} name accessor ${index}, which the model does not have`)
+  const view = json.bufferViews?.[accessor.bufferView]
+  if (!view) fail(`the body's ${what} (accessor ${index}) are not stored in a buffer view`)
+  return { accessor, view }
+}
+
 /** Where an accessor's numbers are in the file, as a byte offset, with its component count. */
-function locateAccessor({ json, binStart }, index, componentType, components) {
-  const accessor = json.accessors[index]
-  const view = json.bufferViews[accessor.bufferView]
-  if (accessor.componentType !== componentType) fail(`accessor ${index} has an unexpected component type`)
-  if (view.byteStride && view.byteStride !== components * 4) fail(`accessor ${index} is interleaved`)
-  return { offset: binStart + (view.byteOffset ?? 0) + (accessor.byteOffset ?? 0), count: accessor.count, components }
+function locateAccessor(glb, index, componentType, components, what) {
+  const { accessor, view } = accessorOf(glb, index, what)
+  if (accessor.componentType !== componentType) fail(`the body's ${what} (accessor ${index}) have an unexpected component type`)
+  if (view.byteStride && view.byteStride !== components * 4) fail(`the body's ${what} (accessor ${index}) are interleaved`)
+  return { offset: glb.binStart + (view.byteOffset ?? 0) + (accessor.byteOffset ?? 0), count: accessor.count, components }
 }
 
 function readFloats(glb, { offset, count, components }) {
@@ -119,21 +142,23 @@ function writeFloats(glb, { offset }, values, changed) {
 
 /** The body: the mesh primitive with the most vertices. */
 function findBody(glb) {
+  const meshes = glb.json.meshes
+  if (!Array.isArray(meshes) || meshes.length === 0) fail('the model has no meshes')
   let body = null
-  for (const mesh of glb.json.meshes) {
-    for (const primitive of mesh.primitives) {
-      const count = glb.json.accessors[primitive.attributes.POSITION].count
-      if (!body || count > body.count) body = { primitive, count }
+  for (const mesh of meshes) {
+    for (const primitive of mesh.primitives ?? []) {
+      const count = glb.json.accessors?.[primitive.attributes?.POSITION]?.count
+      if (count !== undefined && (!body || count > body.count)) body = { primitive, count }
     }
   }
+  if (!body) fail('no mesh of the model has positions (POSITION)')
   const { primitive } = body
   if ((primitive.mode ?? 4) !== 4 || primitive.indices === undefined) fail('the body is not an indexed triangle mesh')
   return primitive
 }
 
 function readIndices(glb, index) {
-  const accessor = glb.json.accessors[index]
-  const view = glb.json.bufferViews[accessor.bufferView]
+  const { accessor, view } = accessorOf(glb, index, 'triangles (indices)')
   const offset = glb.binStart + (view.byteOffset ?? 0) + (accessor.byteOffset ?? 0)
   const indices = new Uint32Array(accessor.count)
   if (accessor.componentType === UNSIGNED_SHORT) {
@@ -508,9 +533,9 @@ const path = process.argv[2] ?? fileURLToPath(new URL('../public/models/ovice_gu
 const glb = readGlb(path)
 const body = findBody(glb)
 const where = {
-  position: locateAccessor(glb, body.attributes.POSITION, FLOAT, 3),
-  normal: locateAccessor(glb, body.attributes.NORMAL, FLOAT, 3),
-  uv: locateAccessor(glb, body.attributes.TEXCOORD_0, FLOAT, 2),
+  position: locateAccessor(glb, body.attributes.POSITION, FLOAT, 3, 'positions (POSITION)'),
+  normal: locateAccessor(glb, body.attributes.NORMAL, FLOAT, 3, 'normals (NORMAL)'),
+  uv: locateAccessor(glb, body.attributes.TEXCOORD_0, FLOAT, 2, 'texture coordinates (TEXCOORD_0)'),
 }
 const positions = readFloats(glb, where.position)
 const normals = readFloats(glb, where.normal)
