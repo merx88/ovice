@@ -12,7 +12,7 @@
 //
 // Nothing here is part of the product: `OfficeScene` only asks in development.
 import { CLIP_NAMES, CLIPS, type ClipName } from './clips'
-import { LOUNGE_CLIPS } from './clips/lounge'
+import { SEAT_SPOT_CLIPS } from './clips/hop'
 
 /** Where the reviewed character is: on its chair at the desk, standing on the open floor in front of it, or on the sofa. */
 export type ReviewPlace = 'desk' | 'floor' | 'sofa'
@@ -33,7 +33,7 @@ const PLACES: readonly ReviewPlace[] = ['desk', 'floor', 'sofa']
 
 /** The clips that are played standing on the floor, and those that are played on the sofa; every other clip is played at the desk. */
 const STANDING_CLIPS: readonly ClipName[] = ['walk', 'run', 'holdFile']
-const SOFA_CLIPS: readonly ClipName[] = [...LOUNGE_CLIPS, 'hopOn', 'hopOff']
+const SOFA_CLIPS = SEAT_SPOT_CLIPS
 
 /** Where `clip` is at home. */
 export function placeOf(clip: ClipName): ReviewPlace {

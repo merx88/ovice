@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react'
 import { StrictMode, type JSXElementConstructor, type ReactNode } from 'react'
-import { PerspectiveCamera } from 'three'
+import { PerspectiveCamera, Vector3 } from 'three'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { MESSAGES, STEP_MESSAGES } from '../agent/messages'
 import * as env from '../app/env'
@@ -10,18 +10,27 @@ import {
   DESK_BOUNDS,
   HANDOFF_FACING,
   HANDOFF_POS,
+  MOBILE_BREAKPOINT,
   SEAT_FACING,
   SEAT_GROUND_POS,
+  SOFA_FACING,
+  SOFA_LIFT,
+  SOFA_SEAT_POS,
+  SOFA_STAND_POS,
 } from '../scene/layout'
 import { useCharacterSignals } from '../store/characterSignals'
+import { useChatActivity } from '../store/chatActivity'
 import { useSettings } from '../store/settings'
 import { useTasks, type Task } from '../store/tasks'
 import { bubbleAnchorAt, DONE_FIRST_LINE_MS } from './bubble'
-import { WALK_PACE } from './clipForState'
+import { RUN_PACE, WALK_PACE } from './clipForState'
 import { CLIPS, type ClipName } from './clips'
+import { SEAT_SPOT_CLIPS } from './clips/hop'
+import { RUN_SPEED } from './clips/run'
 import { SEAT_LIFT } from './clips/shared'
-import { GREET_INTERVAL_MS, POINTER_STILL_MS } from './constants'
+import { GREET_INTERVAL_MS, HEAD_MAX_YAW, POINTER_STILL_MS, SOFA_AFTER_MS } from './constants'
 import { computeLookYaw, lookAngles } from './lookAt'
+import { RUN_TURNING } from './path'
 import { advancePlayback, createPlayback, MAX_STEP } from './playback'
 import { FIDGETS } from './stateMachine'
 import { useCharacterDriver } from './useCharacterDriver'
@@ -59,6 +68,8 @@ let clock = 0
 function mount(wrapper?: JSXElementConstructor<{ children: ReactNode }>) {
   let renders = 0
   const playback = createPlayback()
+  /** The size of the picture, which a test can change as a window is resized. */
+  const view = { ...VIEW }
   const hook = renderHook(
     () => {
       renders++
@@ -77,7 +88,7 @@ function mount(wrapper?: JSXElementConstructor<{ children: ReactNode }>) {
   function frame(seconds = FRAME, apply: (work: () => void) => void = act) {
     clock += seconds * 1000
     const { clip, clipSpeed, onClipFinished } = props()
-    apply(() => loop.callback?.({ camera, size: VIEW }, seconds))
+    apply(() => loop.callback?.({ camera, size: view }, seconds))
     const { justFinished } = advancePlayback(playback, clip, Math.min(seconds, MAX_STEP), CLIPS[clip].duration, clipSpeed)
     if (justFinished) apply(() => onClipFinished(clip))
   }
@@ -96,6 +107,7 @@ function mount(wrapper?: JSXElementConstructor<{ children: ReactNode }>) {
   return {
     props,
     playback,
+    view,
     frame,
     until,
     run: (seconds: number) => {
@@ -110,6 +122,16 @@ function mount(wrapper?: JSXElementConstructor<{ children: ReactNode }>) {
 function signals() {
   const { bubble, badge, charState } = useCharacterSignals.getState()
   return { bubble, badge, charState }
+}
+
+/** Where the character waits, as the interface is told. */
+function place() {
+  return useCharacterSignals.getState().place
+}
+
+/** The chat is used: its field is focused or pressed, or its text changes. */
+function chat() {
+  act(() => useChatActivity.getState().report())
 }
 
 function pointer(type: 'pointermove' | 'pointerdown', x: number, y: number) {
@@ -147,6 +169,9 @@ beforeEach(() => {
   localStorage.clear()
   useTasks.setState({ tasks: [], activeId: null, viewingId: null })
   useSettings.setState({ reduceMotion: false })
+  useChatActivity.setState({ at: -Infinity })
+  // Where the last test left the bubble's anchor is nothing to the next one.
+  useCharacterSignals.getState().bubbleAnchor.current = bubbleAnchorAt(SEAT_GROUND_POS, SEAT_LIFT)
   loop.callback = null
 })
 
@@ -283,6 +308,8 @@ describe('useCharacterDriver', () => {
       expect(signals().charState).toBe('fidgeting')
       stage.untilState('resting')
 
+      // (Somebody is writing in the chat meanwhile, or it would be off to the sofa by now.)
+      chat()
       stage.run((GREET_INTERVAL_MS - (clock - greetedAt)) / 1000)
       pointer('pointermove', 600, 300)
       stage.until(() => signals().charState !== 'watching')
@@ -1099,6 +1126,1037 @@ describe('useCharacterDriver', () => {
       expect(signals().charState).toBe('returning')
       const sat = stage.untilState('resting')
       expect(sat).toBeCloseTo(CLIPS.sitDown.duration as number, 1)
+    })
+  })
+
+  describe('the wait on the sofa', () => {
+    /** A step no longer than this (m) is one frame of running, with room for rounding. */
+    const ONE_FRAME_OF_RUNNING = RUN_SPEED * RUN_PACE * FRAME + 1e-6
+
+    const isSeatSpot = (placement: { position: readonly number[]; facing: number }) =>
+      placement.facing === SOFA_FACING && placement.position.every((value, axis) => value === SOFA_SEAT_POS[axis])
+
+    /**
+     * The point on the floor the body is over: where the character is placed,
+     * moved by where the clip it plays holds its root (only a hop holds it
+     * anywhere but over the placement).
+     */
+    function bodyOf(stage: ReturnType<typeof mount>): [number, number] {
+      const { position, facing } = stage.props().placement
+      const { name, time } = stage.playback
+      const root = name === null ? undefined : CLIPS[name].sample(time)['root 1']?.pos
+      const across = root?.[0] ?? 0
+      const ahead = root?.[2] ?? 0
+      return [
+        position[0] + across * Math.cos(facing) + ahead * Math.sin(facing),
+        position[2] - across * Math.sin(facing) + ahead * Math.cos(facing),
+      ]
+    }
+
+    interface Seen {
+      /** The clip the character played in the frame. */
+      clip: ClipName | null
+      state: string
+      badge: string
+      /** Whether it was placed on the sofa's seat spot. */
+      onSeatSpot: boolean
+      body: [number, number]
+      facing: number
+    }
+
+    /** Runs frames while `going()` holds and returns what every one of them showed; fails after `limit` seconds. */
+    function film(stage: ReturnType<typeof mount>, going: () => boolean, limit = 40): Seen[] {
+      const seen: Seen[] = []
+      while (going()) {
+        stage.frame()
+        const { placement } = stage.props()
+        seen.push({
+          clip: stage.playback.name,
+          state: signals().charState,
+          badge: signals().badge,
+          onSeatSpot: isSeatSpot(placement),
+          body: bodyOf(stage),
+          facing: placement.facing,
+        })
+        if (seen.length * FRAME > limit) throw new Error(`still ${signals().charState} playing ${stage.props().clip} after ${limit} s`)
+      }
+      return seen
+    }
+
+    /** In every frame the character is placed on the sofa's seat spot exactly when the clip it plays is played from there. */
+    function expectPlacedByClip(seen: Seen[]) {
+      for (const [index, frame] of seen.entries()) {
+        const fromSeatSpot = frame.clip !== null && SEAT_SPOT_CLIPS.includes(frame.clip)
+        expect(frame.onSeatSpot, `frame ${index}, playing ${frame.clip}`).toBe(fromSeatSpot)
+      }
+    }
+
+    /** The clips in the order they were played, each named once per run of it. */
+    const clipsOf = (seen: Seen[]) => seen.map(({ clip }) => clip).filter((clip, index, all) => clip !== all[index - 1])
+
+    /** The longest step of the body over the floor between two frames (m). */
+    function longestStep(seen: Seen[]): number {
+      let longest = 0
+      for (let index = 1; index < seen.length; index++) {
+        const [x, z] = seen[index].body
+        const [px, pz] = seen[index - 1].body
+        longest = Math.max(longest, Math.hypot(x - px, z - pz))
+      }
+      return longest
+    }
+
+    /** Leaves the character alone until it lounges on the sofa. */
+    function untilOnSofa(stage: ReturnType<typeof mount>) {
+      stage.until(() => place() === 'sofa', 30)
+      stage.run(0.5)
+    }
+
+    const AT_DESK = { position: [...SEAT_GROUND_POS], facing: SEAT_FACING }
+    const ON_SOFA = { position: [...SOFA_SEAT_POS], facing: SOFA_FACING }
+
+    describe('after ten seconds without chat input', () => {
+      it('gets up, walks round the desk and along its front, hops onto the sofa and lounges there', () => {
+        const stage = mount()
+        stage.run(SOFA_AFTER_MS / 1000 - 0.05)
+        expect(signals()).toEqual({ bubble: [], badge: 'idle', charState: 'resting' })
+        expect(place()).toBe('desk')
+        stage.run(0.1)
+        expect(signals()).toEqual({ bubble: [], badge: 'idle', charState: 'goingToSofa' })
+
+        // Up from the chair, in place.
+        stage.frame()
+        expect(stage.props()).toMatchObject({ clip: 'standUp', clipSpeed: 1, lookTarget: null, placement: AT_DESK })
+        const stoodUp = stage.until(() => stage.props().clip === 'walk')
+        expect(stoodUp).toBeCloseTo(CLIPS.standUp.duration as number, 1)
+        expect(stage.props().placement.position).toEqual([...SEAT_GROUND_POS])
+        expect(stage.props().clipSpeed).toBe(WALK_PACE)
+
+        // The walk: clear of the desk all the way, round its left end.
+        let leftmost = Infinity
+        let frontmost = -Infinity
+        const walk = film(stage, () => stage.props().clip === 'walk')
+        for (const { body: [x, z] } of walk) {
+          leftmost = Math.min(leftmost, x)
+          frontmost = Math.max(frontmost, z)
+          const besideX = Math.max(DESK_BOUNDS.min[0] - x, 0, x - DESK_BOUNDS.max[0])
+          const besideZ = Math.max(DESK_BOUNDS.min[2] - z, 0, z - DESK_BOUNDS.max[2])
+          expect(Math.hypot(besideX, besideZ), `at ${x.toFixed(2)}, ${z.toFixed(2)}`).toBeGreaterThan(CHARACTER_BODY_RADIUS - 0.001)
+        }
+        expect(leftmost).toBeLessThan(DESK_BOUNDS.min[0] - CHARACTER_BODY_RADIUS)
+        expect(frontmost).toBeGreaterThan(DESK_BOUNDS.max[2] + CHARACTER_BODY_RADIUS)
+        expect(walk.length * FRAME).toBeGreaterThan(4.8)
+        expect(walk.length * FRAME).toBeLessThan(5.9)
+        // It stands in front of the sofa, its back to it; all the way there it kept its Z's and its silence.
+        const [standX, standZ] = walk[walk.length - 1].body
+        expect(Math.hypot(standX - SOFA_STAND_POS[0], standZ - SOFA_STAND_POS[2])).toBeLessThan(1e-9)
+        expect(Math.abs(walk[walk.length - 1].facing - SOFA_FACING)).toBeLessThan(0.26)
+        expect(new Set(walk.map(({ badge }) => badge))).toEqual(new Set(['idle']))
+        expect(signals()).toEqual({ bubble: [], badge: 'idle', charState: 'goingToSofa' })
+        expect(place()).toBe('desk')
+
+        // The hop, played from the seat spot, and then it lounges.
+        expect(stage.props().clip).toBe('hopOn')
+        const hop = film(stage, () => signals().charState === 'goingToSofa')
+        expect(hop.length * FRAME).toBeCloseTo(CLIPS.hopOn.duration as number, 1)
+        expect(signals()).toEqual({ bubble: [], badge: 'idle', charState: 'resting' })
+        expect(place()).toBe('sofa')
+        stage.frame()
+        expect(stage.props()).toMatchObject({ clip: 'loungeIdle', clipSpeed: 1, badge: 'idle', holdingFile: false, lookTarget: null, placement: ON_SOFA })
+
+        // And there it stays for as long as nobody wants anything.
+        stage.run(30)
+        expect(signals().charState).toBe('resting')
+        expect(stage.props()).toMatchObject({ clip: 'loungeIdle', placement: ON_SOFA })
+      })
+
+      it('counts the ten seconds from the last chat input', () => {
+        const stage = mount()
+        stage.run(6)
+        chat()
+        expect(signals().charState).toBe('resting')
+        stage.run(9.9)
+        expect(signals().charState).toBe('resting')
+        stage.run(0.2)
+        expect(signals().charState).toBe('goingToSofa')
+      })
+
+      it('counts them from its appearing where the chat was used before it had appeared', () => {
+        // Somebody typed while the model was still loading: that is no reason to walk off two seconds later.
+        chat()
+        clock += 8_000
+        const stage = mount()
+        stage.run(9.9)
+        expect(signals().charState).toBe('resting')
+        stage.run(0.2)
+        expect(signals().charState).toBe('goingToSofa')
+      })
+
+      it('goes although the pointer keeps moving, and does not look at it on the way', () => {
+        const stage = mount()
+        // The pointer moves every half second: it never gets to wave, and the ten seconds pass all the same.
+        for (let moved = 0; moved < 21; moved++) {
+          pointer('pointermove', 200 + moved * 10, 150)
+          stage.run(0.5)
+        }
+        expect(signals().charState).toBe('goingToSofa')
+        pointer('pointermove', 900, 500)
+        stage.frame()
+        expect(signals().charState).toBe('goingToSofa')
+        expect(stage.props().lookTarget).toBeNull()
+      })
+
+      it('finishes a wave and the fidget after it first', () => {
+        vi.mocked(Math.random).mockReturnValue(0.3)
+        const stage = mount()
+        stage.run(8.5)
+        pointer('pointermove', 200, 150)
+        stage.untilState('greeting')
+        const states = new Set<string>()
+        stage.until(() => {
+          states.add(signals().charState)
+          return signals().charState === 'goingToSofa'
+        })
+        // The wave began before the ten seconds were over: it and the stretch after it are played out.
+        expect([...states]).toEqual(['greeting', 'fidgeting', 'resting', 'goingToSofa'])
+        expect(clock - 1000).toBeGreaterThan(SOFA_AFTER_MS + 3_000)
+      })
+
+      it('finishes a sip first: the cup goes back on the desk before it leaves', () => {
+        const stage = mount()
+        stage.run(6.5)
+        pointer('pointermove', 200, 150)
+        stage.untilState('fidgeting')
+        stage.frame()
+        expect(stage.props().clip).toBe('sip')
+        // The ten seconds are over in the middle of the sip.
+        const sipping = film(stage, () => signals().charState === 'fidgeting')
+        expect(clock - 1000).toBeGreaterThan(SOFA_AFTER_MS)
+        expect(sipping.length * FRAME).toBeGreaterThan((CLIPS.sip.duration as number) - 0.1)
+        expect(new Set(sipping.map(({ clip }) => clip))).toEqual(new Set(['sip']))
+        stage.run(0.1)
+        expect(signals().charState).toBe('goingToSofa')
+      })
+
+      it('does not leave while it works, brings a result out or holds the file', () => {
+        const stage = mount()
+        const task = startTask()
+        stage.run(15)
+        expect(signals().charState).toBe('working')
+        finish(task.id)
+        stage.untilState('handingFile')
+        stage.run(60)
+        expect(signals().charState).toBe('handingFile')
+        expect(place()).toBe('desk')
+        // Its wait starts when it is back on its chair.
+        act(() => stage.props().onFolderClick())
+        act(() => useTasks.getState().setViewing(null))
+        stage.untilState('resting')
+        const restedAt = clock
+        stage.untilState('goingToSofa')
+        expect(clock - restedAt).toBeGreaterThanOrEqual(SOFA_AFTER_MS)
+        expect(clock - restedAt).toBeLessThan(SOFA_AFTER_MS + 2 * FRAME * 1000)
+      })
+
+      it('does not render while it walks: only for a change of clip', () => {
+        const stage = mount()
+        stage.until(() => stage.props().clip === 'walk', 30)
+        const renders = stage.renders()
+        stage.until(() => stage.props().clip === 'hopOn')
+        expect(stage.renders() - renders).toBeLessThanOrEqual(1)
+      })
+    })
+
+    describe('on the sofa', () => {
+      it('tells the interface where it is, with its Z\'s and nothing to say', () => {
+        const stage = mount()
+        const places: string[] = []
+        onTestFinished(
+          useCharacterSignals.subscribe((state, previous) => {
+            if (state.place !== previous.place) places.push(state.place)
+          }),
+        )
+        untilOnSofa(stage)
+        expect(places).toEqual(['sofa'])
+        expect(signals()).toEqual({ bubble: [], badge: 'idle', charState: 'resting' })
+        chat()
+        expect(places).toEqual(['sofa', 'desk'])
+      })
+
+      it('follows the pointer with its head, waves when the pointer is still, and fidgets as one does on a sofa', () => {
+        vi.mocked(Math.random).mockReturnValue(0)
+        const stage = mount()
+        untilOnSofa(stage)
+
+        pointer('pointermove', 200, 150)
+        expect(signals().charState).toBe('watching')
+        stage.frame()
+        expect(stage.props()).toMatchObject({ clip: 'loungeIdle', placement: ON_SOFA })
+        expect(stage.props().lookTarget).not.toBeNull()
+
+        stage.run(POINTER_STILL_MS / 1000 + 0.1)
+        expect(signals().charState).toBe('greeting')
+        expect(stage.props().clip).toBe('loungeWave')
+        expect(stage.props().lookTarget).not.toBeNull()
+        const waved = stage.untilState('fidgeting')
+        expect(waved).toBeCloseTo(CLIPS.loungeWave.duration as number, 0)
+        stage.frame()
+        // The first of the sofa's two fidgets: there is no cup to sip from and no desk to drum on.
+        expect(stage.props()).toMatchObject({ clip: 'loungeStretch', lookTarget: null, placement: ON_SOFA })
+        const stretched = stage.untilState('resting')
+        expect(stretched).toBeCloseTo(CLIPS.loungeStretch.duration as number, 0)
+        expect(place()).toBe('sofa')
+        stage.frame()
+        expect(stage.props()).toMatchObject({ clip: 'loungeIdle', badge: 'idle', placement: ON_SOFA })
+
+        // The other one, and the pointer interrupts it.
+        vi.mocked(Math.random).mockReturnValue(0.9)
+        pointer('pointermove', 300, 150)
+        stage.untilState('fidgeting')
+        stage.frame()
+        expect(stage.props().clip).toBe('loungeLookAround')
+        pointer('pointermove', 320, 150)
+        expect(signals().charState).toBe('watching')
+        expect(place()).toBe('sofa')
+      })
+
+      /** The yaw a character seated on the sofa would have to turn its head by to look at `target`. */
+      const yawFromSofa = (target: readonly [number, number, number]) =>
+        lookAngles([SOFA_SEAT_POS[0], 1.2, SOFA_SEAT_POS[2]], SOFA_FACING, target)
+
+      /** Where on the screen a point of the room is drawn, in pixels. */
+      function onScreen(point: readonly [number, number, number]): [number, number] {
+        const projected = new Vector3(...point).project(camera)
+        return [((projected.x + 1) / 2) * VIEW.width, ((1 - projected.y) / 2) * VIEW.height]
+      }
+
+      it('looks straight out at the viewer when the pointer is over it', () => {
+        const stage = mount()
+        untilOnSofa(stage)
+        const [x, y] = onScreen([SOFA_SEAT_POS[0], 1.2, SOFA_SEAT_POS[2]])
+        pointer('pointermove', x, y)
+        stage.frame()
+        const { yaw, pitch } = yawFromSofa(stage.props().lookTarget as readonly [number, number, number])
+        expect(Math.abs(yaw)).toBeLessThan(0.02)
+        expect(Math.abs(pitch)).toBeLessThan(0.1)
+      })
+
+      it('looks left as far as its head goes for a pointer at the far left, and a little to the right for one at the right edge', () => {
+        const stage = mount()
+        untilOnSofa(stage)
+        pointer('pointermove', 0, VIEW.height / 2)
+        stage.frame()
+        // Positive is towards its own left, which is the viewer's right.
+        const left = yawFromSofa(stage.props().lookTarget as readonly [number, number, number]).yaw
+        expect(left).toBeLessThan(-HEAD_MAX_YAW)
+        // The head alone turns there: it stops at its limit and the body stays where it is.
+        expect(computeLookYaw(left, false)).toEqual({ head: -HEAD_MAX_YAW, body: 0 })
+
+        pointer('pointermove', VIEW.width, VIEW.height / 2)
+        stage.frame()
+        const right = yawFromSofa(stage.props().lookTarget as readonly [number, number, number]).yaw
+        expect(right).toBeGreaterThan(0.1)
+        expect(right).toBeLessThan(0.5)
+      })
+    })
+
+    describe('when the chat is used', () => {
+      it('hops off, runs back the way it came and sits down, ready within three and a half seconds', () => {
+        const stage = mount()
+        untilOnSofa(stage)
+        chat()
+        expect(signals()).toEqual({ bubble: [], badge: 'hidden', charState: 'rushingToDesk' })
+        expect(place()).toBe('desk')
+
+        const back = film(stage, () => signals().charState === 'rushingToDesk')
+        // Seated and ready: at its desk, at rest, the Z's back above its head.
+        expect(back.length * FRAME).toBeLessThan(3.5)
+        expect(signals()).toEqual({ bubble: [], badge: 'idle', charState: 'resting' })
+        expect(stage.props().placement).toEqual(AT_DESK)
+        stage.frame()
+        expect(stage.props()).toMatchObject({ clip: 'idle', clipSpeed: 1, badge: 'idle' })
+
+        // What it did on the way: off the sofa, the run, onto the chair.
+        expect(clipsOf(back)).toEqual(['hopOff', 'run', 'sitDown'])
+        const played = (clip: ClipName) => back.filter((frame) => frame.clip === clip).length * FRAME
+        expect(played('hopOff')).toBeCloseTo(CLIPS.hopOff.duration as number, 1)
+        expect(played('run')).toBeGreaterThan(1.7)
+        expect(played('run')).toBeLessThan(2.2)
+        expect(played('sitDown')).toBeCloseTo(CLIPS.sitDown.duration as number, 1)
+        // The run is not started before the hop has landed it on the floor in front of the sofa...
+        const firstRun = back.findIndex(({ clip }) => clip === 'run')
+        const [landedX, landedZ] = back[firstRun - 1].body
+        expect(Math.hypot(landedX - SOFA_STAND_POS[0], landedZ - SOFA_STAND_POS[2])).toBeLessThan(1e-6)
+        // ...it goes round the left end of the desk, and it shows no symbol all the way.
+        expect(Math.min(...back.map(({ body: [x] }) => x))).toBeLessThan(DESK_BOUNDS.min[0] - CHARACTER_BODY_RADIUS)
+        const onTheRun = back.filter(({ state }) => state === 'rushingToDesk')
+        expect(onTheRun.length).toBe(back.length - 1)
+        expect(new Set(onTheRun.map(({ badge }) => badge))).toEqual(new Set(['hidden']))
+      })
+
+      it('plays the run as fast as it is moved, so that its feet keep pace with the floor', () => {
+        const stage = mount()
+        untilOnSofa(stage)
+        chat()
+        stage.until(() => stage.playback.name === 'run')
+        expect(stage.props()).toMatchObject({ clip: 'run', clipSpeed: RUN_PACE })
+        const run = film(stage, () => stage.props().clip === 'run')
+        // On the straight along the desk's front it covers the ground its stride does, to within half a percent.
+        const straight = run.filter(({ body: [x, z] }) => Math.abs(z - HANDOFF_POS[2]) < 1e-6 && x > -1 && x < 1)
+        expect(straight.length).toBeGreaterThan(10)
+        const stride = RUN_SPEED * RUN_PACE * FRAME
+        for (let index = 1; index < straight.length; index++) {
+          const covered = straight[index - 1].body[0] - straight[index].body[0]
+          expect(covered).toBeGreaterThan(stride * 0.995)
+          expect(covered).toBeLessThanOrEqual(stride + 1e-9)
+        }
+      })
+
+      it('changes nothing when the chat is used again while it runs', () => {
+        const stage = mount()
+        untilOnSofa(stage)
+        chat()
+        stage.until(() => stage.playback.name === 'run')
+        stage.run(0.5)
+        const renders = stage.renders()
+        const before = { ...stage.props().placement, position: [...stage.props().placement.position] }
+        clock += 1
+        chat()
+        chat()
+        expect(signals()).toEqual({ bubble: [], badge: 'hidden', charState: 'rushingToDesk' })
+        expect(stage.props().placement).toEqual(before)
+        expect(stage.renders()).toBe(renders)
+        const rest = stage.untilState('resting')
+        expect(rest).toBeLessThan(3)
+        expect(stage.props().placement).toEqual(AT_DESK)
+      })
+
+      it('goes back to the sofa when ten more seconds pass without chat input', () => {
+        const stage = mount()
+        untilOnSofa(stage)
+        chat()
+        stage.untilState('resting')
+        expect(place()).toBe('desk')
+        const restedAt = clock
+        stage.untilState('goingToSofa', 15)
+        expect(clock - restedAt).toBeGreaterThanOrEqual(SOFA_AFTER_MS)
+        untilOnSofa(stage)
+        expect(stage.props()).toMatchObject({ clip: 'loungeIdle', placement: ON_SOFA })
+      })
+    })
+
+    describe('where it is placed', () => {
+      /** The whole trip: left alone until it lounges, called back, until it rests at its desk again. */
+      function wholeTrip(stage: ReturnType<typeof mount>): Seen[] {
+        const out = film(stage, () => place() !== 'sofa')
+        const lounging = film(stage, () => stage.playback.name !== 'loungeIdle' || stage.playback.time < 0.5)
+        chat()
+        const back = film(stage, () => signals().charState !== 'resting')
+        return [...out, ...lounging, ...back, ...film(stage, () => stage.playback.name !== 'idle')]
+      }
+
+      it('is the sofa\'s seat spot in exactly the frames in which the clip it plays is played from there', () => {
+        const stage = mount()
+        const trip = wholeTrip(stage)
+        expect(clipsOf(trip)).toEqual(['idle', 'standUp', 'walk', 'hopOn', 'loungeIdle', 'hopOff', 'run', 'sitDown', 'idle'])
+        expectPlacedByClip(trip)
+        // Each hop takes the placement with it in the frame it starts, not a frame before and not one after.
+        const changes = trip.flatMap((frame, index) => (index > 0 && frame.onSeatSpot !== trip[index - 1].onSeatSpot ? [`${trip[index - 1].clip} -> ${frame.clip}`] : []))
+        expect(changes).toEqual(['walk -> hopOn', 'hopOff -> run'])
+      })
+
+      it('never moves the body further between two frames than one frame of running covers, the joins of the hops included', () => {
+        const stage = mount()
+        const trip = wholeTrip(stage)
+        expect(longestStep(trip)).toBeLessThanOrEqual(ONE_FRAME_OF_RUNNING)
+        // Across the two joins the body stays where it is: the hop holds it where the walk left it, and the run starts where the hop landed it.
+        for (const [from, to] of [['walk', 'hopOn'], ['hopOff', 'run']] as const) {
+          const join = trip.findIndex((frame, index) => frame.clip === to && trip[index - 1]?.clip === from)
+          const [x, z] = trip[join].body
+          const [px, pz] = trip[join - 1].body
+          expect(Math.hypot(x - px, z - pz), `${from} -> ${to}`).toBeLessThanOrEqual(ONE_FRAME_OF_RUNNING)
+          // In the frame before the join and in the frame of the join it is over the spot in front of the sofa.
+          for (const [sx, sz] of [trip[join - 1].body, trip[join].body]) {
+            expect(Math.hypot(sx - SOFA_STAND_POS[0], sz - SOFA_STAND_POS[2]), `${from} -> ${to}`).toBeLessThan(1e-6)
+          }
+        }
+      })
+
+      it('never turns the placement faster than a run turns, but for the last of its turn to the sofa, which the hop takes over', () => {
+        const stage = mount()
+        const trip = wholeTrip(stage)
+        for (let index = 1; index < trip.length; index++) {
+          const turned = Math.abs(Math.atan2(Math.sin(trip[index].facing - trip[index - 1].facing), Math.cos(trip[index].facing - trip[index - 1].facing)))
+          const ontoSofa = trip[index].clip === 'hopOn' && trip[index - 1].clip === 'walk'
+          // It may still be a quarter of a radian short of facing away from the sofa when the hop begins: the
+          // character turns the pose it comes from into the new placement, so the body does not snap round.
+          expect(turned, `frame ${index}: ${trip[index - 1].clip} -> ${trip[index].clip}`).toBeLessThanOrEqual(ontoSofa ? 0.26 : RUN_TURNING.maxSpeed * FRAME + 1e-9)
+        }
+      })
+
+      describe('where the character is shown a clip later than it was asked for', () => {
+        /** Runs `frames` frames in which nothing is rendered, as when frames come faster than React gets a turn. */
+        function starved(stage: ReturnType<typeof mount>, frames: number, each: () => void) {
+          Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', false)
+          try {
+            for (let frame = 0; frame < frames; frame++) {
+              stage.frame(FRAME, (work) => work())
+              each()
+            }
+          } finally {
+            Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
+          }
+        }
+        const rendered = () =>
+          act(async () => {
+            await new Promise((resolve) => setTimeout(resolve, 30))
+          })
+        const fromStandSpot = ([x, z]: [number, number]) => Math.hypot(x - SOFA_STAND_POS[0], z - SOFA_STAND_POS[2])
+
+        it('stays in front of the sofa until it is shown the hop, and is on the seat spot in the frame it starts hopping', async () => {
+          const stage = mount()
+          stage.until(() => stage.playback.name === 'walk', 30)
+          // In front of the sofa, with the last of its turn away from it still to go.
+          const turnLeft = () => Math.abs(Math.atan2(Math.sin(stage.props().placement.facing - SOFA_FACING), Math.cos(stage.props().placement.facing - SOFA_FACING)))
+          stage.until(() => fromStandSpot(bodyOf(stage)) === 0 && turnLeft() < 0.4)
+          expect(stage.props().clip).toBe('walk')
+
+          // It arrives and the hop is asked for, but for a fifth of a second the character goes on being shown the walk.
+          starved(stage, 12, () => {
+            expect(stage.props().clip).toBe('walk')
+            expect(isSeatSpot(stage.props().placement)).toBe(false)
+            expect(fromStandSpot(bodyOf(stage))).toBe(0)
+          })
+          expect(signals().charState).toBe('goingToSofa')
+          await rendered()
+          expect(stage.props().clip).toBe('hopOn')
+          // Still where it stood: the placement only changes in the frame in which the hop is played first.
+          expect(isSeatSpot(stage.props().placement)).toBe(false)
+          stage.frame()
+          expect(stage.playback).toMatchObject({ name: 'hopOn', time: 0 })
+          expect(stage.props().placement).toEqual(ON_SOFA)
+          expect(fromStandSpot(bodyOf(stage))).toBeLessThan(1e-6)
+        })
+
+        it('stays on the seat spot until it is shown the run, and starts the run where the hop landed it', async () => {
+          const stage = mount()
+          untilOnSofa(stage)
+          chat()
+          stage.until(() => stage.playback.name === 'hopOff' && stage.playback.time + 1.5 * FRAME >= (CLIPS.hopOff.duration as number))
+
+          // The hop off ends and the run is asked for, but the character goes on being shown the end of the hop.
+          starved(stage, 12, () => {
+            expect(stage.props().clip).toBe('hopOff')
+            expect(stage.props().placement).toEqual(ON_SOFA)
+            expect(fromStandSpot(bodyOf(stage))).toBeLessThan(0.02)
+          })
+          expect(stage.playback.finished).toBe(true)
+          expect(signals().charState).toBe('rushingToDesk')
+          await rendered()
+          expect(stage.props().clip).toBe('run')
+          expect(stage.props().placement).toEqual(ON_SOFA)
+          // Not a step was taken meanwhile: the run starts from the spot in front of the sofa, in the frame it is first played.
+          stage.frame()
+          expect(stage.playback).toMatchObject({ name: 'run', time: 0 })
+          expect(isSeatSpot(stage.props().placement)).toBe(false)
+          expect(fromStandSpot(bodyOf(stage))).toBeLessThan(1e-6)
+          // And its first step is one frame of running.
+          stage.frame()
+          expect(fromStandSpot(bodyOf(stage))).toBeGreaterThan(ONE_FRAME_OF_RUNNING * 0.9)
+          expect(fromStandSpot(bodyOf(stage))).toBeLessThanOrEqual(ONE_FRAME_OF_RUNNING)
+          stage.untilState('resting')
+          expect(stage.props().placement).toEqual(AT_DESK)
+        })
+      })
+
+      it('keeps the bubble\'s anchor beside the body all the way: it does not jump where the placement does', () => {
+        const stage = mount()
+        const { bubbleAnchor } = useCharacterSignals.getState()
+        let previous = [...bubbleAnchor.current]
+        let longest = 0
+        const check = () => {
+          longest = Math.max(longest, Math.hypot(bubbleAnchor.current[0] - previous[0], bubbleAnchor.current[2] - previous[2]))
+          previous = [...bubbleAnchor.current]
+          return true
+        }
+        film(stage, () => check() && place() !== 'sofa')
+        stage.run(1.5)
+        // Lounging: above the cushion, as far above the head as at the desk.
+        const lounging = bubbleAnchorAt(SOFA_SEAT_POS, SOFA_LIFT)
+        bubbleAnchor.current.forEach((value, axis) => expect(value).toBeCloseTo(lounging[axis], 2))
+        previous = [...bubbleAnchor.current]
+        chat()
+        film(stage, () => check() && signals().charState !== 'resting')
+        stage.run(1.5)
+        expect(longest).toBeLessThanOrEqual(ONE_FRAME_OF_RUNNING)
+        const seated = bubbleAnchorAt(SEAT_GROUND_POS, SEAT_LIFT)
+        bubbleAnchor.current.forEach((value, axis) => expect(value).toBeCloseTo(seated[axis], 2))
+      })
+    })
+
+    describe('called back on its way out', () => {
+      /** Left alone until it is `seconds` into the walk to the sofa. */
+      function walkingOut(seconds: number) {
+        const stage = mount()
+        stage.until(() => stage.playback.name === 'walk', 30)
+        stage.run(seconds)
+        return stage
+      }
+
+      it('turns round where it is and runs back, without a jump in place or in the way it faces', () => {
+        const stage = walkingOut(2.5)
+        const [turnedAtX, , turnedAtZ] = stage.props().placement.position
+        // Half-way: on the far side of the desk's left end.
+        expect(turnedAtX).toBeLessThan(DESK_BOUNDS.min[0])
+        chat()
+        expect(signals()).toEqual({ bubble: [], badge: 'hidden', charState: 'rushingToDesk' })
+
+        const back = film(stage, () => signals().charState === 'rushingToDesk')
+        expect(clipsOf(back)).toEqual(['run', 'sitDown'])
+        // It spins round on the spot before it takes a step...
+        const [firstX, firstZ] = back[3].body
+        expect([firstX, firstZ]).toEqual([turnedAtX, turnedAtZ])
+        // ...and nothing jumps: no step longer than a frame of running, no turn faster than a run turns.
+        expect(longestStep(back)).toBeLessThanOrEqual(ONE_FRAME_OF_RUNNING)
+        for (let index = 1; index < back.length; index++) {
+          const turned = Math.abs(Math.atan2(Math.sin(back[index].facing - back[index - 1].facing), Math.cos(back[index].facing - back[index - 1].facing)))
+          expect(turned).toBeLessThanOrEqual(RUN_TURNING.maxSpeed * FRAME + 1e-9)
+        }
+        // Never on the seat spot: it had not got as far as the sofa.
+        expectPlacedByClip(back)
+        expect(back.some(({ onSeatSpot }) => onSeatSpot)).toBe(false)
+        // Back the way it came, which is shorter than the whole run, and seated at its desk.
+        expect(back.length * FRAME).toBeLessThan(2.6)
+        expect(signals()).toEqual({ bubble: [], badge: 'idle', charState: 'resting' })
+        expect(stage.props().placement).toEqual(AT_DESK)
+      })
+
+      it('ends seated at its desk when the chat is used twice in a row', () => {
+        const stage = walkingOut(3.5)
+        chat()
+        stage.run(0.2)
+        clock += 1
+        chat()
+        expect(signals().charState).toBe('rushingToDesk')
+        const back = film(stage, () => signals().charState === 'rushingToDesk')
+        expect(clipsOf(back)).toEqual(['run', 'sitDown'])
+        expect(longestStep(back)).toBeLessThanOrEqual(ONE_FRAME_OF_RUNNING)
+        expect(stage.props().placement).toEqual(AT_DESK)
+        expect(signals().charState).toBe('resting')
+      })
+
+      it('sits straight down again when it had only begun to get up', () => {
+        const stage = mount()
+        stage.untilState('goingToSofa', 15)
+        stage.run(0.4)
+        expect(stage.props().clip).toBe('standUp')
+        chat()
+        expect(signals().charState).toBe('rushingToDesk')
+        const back = film(stage, () => signals().charState === 'rushingToDesk')
+        expect(clipsOf(back)).toEqual(['sitDown'])
+        expect(back.length * FRAME).toBeLessThan(1.1)
+        expect(back.every(({ body: [x, z] }) => x === SEAT_GROUND_POS[0] && z === SEAT_GROUND_POS[2])).toBe(true)
+        expect(signals().charState).toBe('resting')
+      })
+
+      it('finishes the hop onto the sofa before it hops off again', () => {
+        const stage = mount()
+        stage.until(() => stage.playback.name === 'hopOn', 30)
+        stage.run(0.2)
+        expect(signals().charState).toBe('goingToSofa')
+        chat()
+        expect(signals()).toEqual({ bubble: [], badge: 'hidden', charState: 'rushingToDesk' })
+        expect(place()).toBe('desk')
+
+        const back = film(stage, () => signals().charState === 'rushingToDesk')
+        // The hop is played to its end (it was a third of the way in), then the hop off, the run, the chair.
+        expect(clipsOf(back)).toEqual(['hopOn', 'hopOff', 'run', 'sitDown'])
+        const hopped = back.filter(({ clip }) => clip === 'hopOn').length * FRAME
+        expect(hopped).toBeCloseTo((CLIPS.hopOn.duration as number) - 0.2, 1)
+        expect(longestStep(back)).toBeLessThanOrEqual(ONE_FRAME_OF_RUNNING)
+        expectPlacedByClip(back)
+        expect(back.filter(({ onSeatSpot }) => onSeatSpot).length).toBeGreaterThan(30)
+        expect(signals().charState).toBe('resting')
+        expect(stage.props().placement).toEqual(AT_DESK)
+      })
+
+      it('finishes the hop also when the call comes in the very frame it arrives in front of the sofa', () => {
+        const stage = mount()
+        // The hop has been asked for, but the character has not been shown it yet.
+        stage.until(() => stage.props().clip === 'hopOn', 30)
+        expect(stage.playback.name).toBe('walk')
+        chat()
+        const back = film(stage, () => signals().charState === 'rushingToDesk')
+        expect(clipsOf(back)).toEqual(['hopOn', 'hopOff', 'run', 'sitDown'])
+        expect(longestStep(back)).toBeLessThanOrEqual(ONE_FRAME_OF_RUNNING)
+        expectPlacedByClip(back)
+        expect(stage.props().placement).toEqual(AT_DESK)
+      })
+    })
+
+    describe('a task started while it is away from its desk', () => {
+      it('started on the sofa: shows its symbol and its line while the character runs, is worked on once it is seated, and is handed over', () => {
+        const stage = mount()
+        untilOnSofa(stage)
+        const task = startTask()
+        expect(signals()).toEqual({ bubble: [], badge: 'thinking', charState: 'rushingToDesk' })
+        update(task.id, { step: 'searching', message: STEP_MESSAGES.searching })
+        expect(signals()).toEqual({ bubble: [STEP_MESSAGES.searching], badge: 'working', charState: 'rushingToDesk' })
+
+        const back = film(stage, () => signals().charState === 'rushingToDesk')
+        // It runs; the work clip only starts when it is on its chair.
+        expect(clipsOf(back)).toEqual(['hopOff', 'run', 'sitDown'])
+        expect(new Set(back.map(({ badge }) => badge))).toEqual(new Set(['working']))
+        expect(back.length * FRAME).toBeLessThan(3.5)
+        expect(signals()).toEqual({ bubble: [STEP_MESSAGES.searching], badge: 'working', charState: 'working' })
+        expect(stage.props().placement).toEqual(AT_DESK)
+        stage.frame()
+        expect(stage.props().clip).toBe('typing')
+
+        // And when it is done the file is brought out, and opens this task.
+        finish(task.id)
+        stage.untilState('handingFile')
+        expect(stage.props().placement.position[2]).toBe(HANDOFF_POS[2])
+        act(() => stage.props().onFolderClick())
+        expect(useTasks.getState().viewingId).toBe(task.id)
+      })
+
+      it('already done when the character sits down: it gets up again and hands the result over', () => {
+        const stage = mount()
+        untilOnSofa(stage)
+        const task = startTask()
+        stage.run(0.5)
+        finish(task.id)
+        expect(signals()).toEqual({ bubble: [], badge: 'done', charState: 'rushingToDesk' })
+
+        const states: string[] = []
+        stage.until(() => {
+          if (states[states.length - 1] !== signals().charState) states.push(signals().charState)
+          return signals().charState === 'handingFile'
+        })
+        // It sits down first, as it does on the way back from a hand-over.
+        expect(states).toEqual(['rushingToDesk', 'standingUp', 'walkingOut', 'handingFile'])
+        expect(signals().bubble).toEqual([MESSAGES.done[1]])
+        act(() => stage.props().onFolderClick())
+        expect(useTasks.getState().viewingId).toBe(task.id)
+      })
+
+      it('failed on the way: the trouble shows once it is seated', () => {
+        const stage = mount()
+        untilOnSofa(stage)
+        const task = startTask()
+        stage.run(1)
+        fail(task.id)
+        expect(signals()).toEqual({ bubble: [], badge: 'error', charState: 'rushingToDesk' })
+        stage.untilState('error')
+        expect(signals().bubble).toEqual([MESSAGES.error])
+        expect(stage.props().placement).toEqual(AT_DESK)
+        stage.untilState('resting')
+      })
+
+      it('cancelled on the way: it says so while it runs, and rests at its desk', () => {
+        const stage = mount()
+        untilOnSofa(stage)
+        const task = startTask()
+        stage.run(1)
+        cancel(task.id)
+        expect(signals()).toEqual({ bubble: [MESSAGES.cancel], badge: 'hidden', charState: 'rushingToDesk' })
+        stage.untilState('resting')
+        expect(stage.props().placement).toEqual(AT_DESK)
+        stage.run(2.1)
+        expect(signals()).toEqual({ bubble: [], badge: 'idle', charState: 'resting' })
+      })
+
+      it('a second one in place of a first that finished meanwhile: the second is worked on, the first stays in the list', () => {
+        const stage = mount()
+        untilOnSofa(stage)
+        const first = startTask('first')
+        stage.run(0.5)
+        finish(first.id)
+        const second = startTask('second')
+        expect(signals()).toEqual({ bubble: [], badge: 'thinking', charState: 'rushingToDesk' })
+        stage.untilState('working')
+        finish(second.id)
+        stage.untilState('handingFile')
+        act(() => stage.props().onFolderClick())
+        expect(useTasks.getState().viewingId).toBe(second.id)
+        expect(useTasks.getState().tasks.map(({ status }) => status)).toEqual(['done', 'done'])
+      })
+
+      it.each([
+        ['while it gets up', 'standUp', ['sitDown']],
+        ['on the way out', 'walk', ['run', 'sitDown']],
+        ['during the hop onto the sofa', 'hopOn', ['hopOn', 'hopOff', 'run', 'sitDown']],
+      ] as const)('started %s: it comes back and works on it', (_, during, clips) => {
+        const stage = mount()
+        stage.until(() => stage.playback.name === during, 30)
+        stage.run(during === 'walk' ? 2 : 0.2)
+        const task = startTask()
+        update(task.id, { step: 'reading', message: STEP_MESSAGES.reading })
+        expect(signals()).toEqual({ bubble: [STEP_MESSAGES.reading], badge: 'thinking', charState: 'rushingToDesk' })
+        const back = film(stage, () => signals().charState === 'rushingToDesk')
+        expect(clipsOf(back)).toEqual(clips)
+        expect(longestStep(back)).toBeLessThanOrEqual(ONE_FRAME_OF_RUNNING)
+        expectPlacedByClip(back)
+        expect(signals()).toEqual({ bubble: [STEP_MESSAGES.reading], badge: 'thinking', charState: 'working' })
+        expect(stage.props().placement).toEqual(AT_DESK)
+        stage.frame()
+        expect(stage.props().clip).toBe('think')
+        finish(task.id)
+        stage.untilState('handingFile')
+      })
+    })
+
+    describe('the status symbol', () => {
+      it('is hidden only while it runs back with nothing queued', () => {
+        const stage = mount()
+        const shown: [string, string][] = []
+        onTestFinished(
+          useCharacterSignals.subscribe((state) => {
+            const last = shown[shown.length - 1]
+            if (!last || last[0] !== state.charState || last[1] !== state.badge) shown.push([state.charState, state.badge])
+          }),
+        )
+        untilOnSofa(stage)
+        pointer('pointermove', 200, 150)
+        stage.untilState('fidgeting')
+        chat()
+        stage.untilState('resting')
+        // A whole round with nothing but the chat: Z's everywhere but on the run.
+        expect(shown).toEqual([
+          ['goingToSofa', 'idle'],
+          ['resting', 'idle'],
+          ['watching', 'idle'],
+          ['greeting', 'idle'],
+          ['fidgeting', 'idle'],
+          ['rushingToDesk', 'hidden'],
+          ['resting', 'idle'],
+        ])
+        expect(stage.props().badge).toBe('idle')
+      })
+
+      it('is the task\'s on the run when a task called it back, and hidden again if that task is cancelled', () => {
+        const stage = mount()
+        untilOnSofa(stage)
+        const task = startTask()
+        stage.frame()
+        expect(stage.props().badge).toBe('thinking')
+        update(task.id, { step: 'writing', message: STEP_MESSAGES.writing })
+        stage.frame()
+        expect(stage.props().badge).toBe('working')
+        cancel(task.id)
+        stage.frame()
+        expect(stage.props().badge).toBe('hidden')
+      })
+    })
+
+    describe('where the sofa is not in the picture', () => {
+      it('never leaves its desk on a view as narrow as a phone\'s', () => {
+        const stage = mount()
+        stage.view.width = 390
+        stage.view.height = 844
+        stage.run(30)
+        expect(signals()).toEqual({ bubble: [], badge: 'idle', charState: 'resting' })
+        expect(place()).toBe('desk')
+        expect(stage.props()).toMatchObject({ clip: 'idle', placement: AT_DESK })
+      })
+
+      it('goes by the width the desktop view starts at', () => {
+        const narrow = mount()
+        narrow.view.width = MOBILE_BREAKPOINT - 1
+        narrow.run(12)
+        expect(signals().charState).toBe('resting')
+        narrow.unmount()
+
+        clock += 1000
+        const wide = mount()
+        wide.view.width = MOBILE_BREAKPOINT
+        wide.run(10.1)
+        expect(signals().charState).toBe('goingToSofa')
+      })
+
+      it('comes back when the window is narrowed while it lounges', () => {
+        const stage = mount()
+        untilOnSofa(stage)
+        stage.view.width = 600
+        stage.frame()
+        expect(signals()).toEqual({ bubble: [], badge: 'hidden', charState: 'rushingToDesk' })
+        const back = film(stage, () => signals().charState === 'rushingToDesk')
+        expect(clipsOf(back)).toEqual(['hopOff', 'run', 'sitDown'])
+        expect(stage.props().placement).toEqual(AT_DESK)
+        // And there it stays, until the window is wide again.
+        stage.run(15)
+        expect(signals().charState).toBe('resting')
+        stage.view.width = 1200
+        stage.untilState('goingToSofa', 1)
+      })
+
+      it('turns round when the window is narrowed while it is on its way', () => {
+        const stage = mount()
+        stage.until(() => stage.playback.name === 'walk', 30)
+        stage.run(3)
+        stage.view.width = 600
+        stage.frame()
+        expect(signals().charState).toBe('rushingToDesk')
+        const back = film(stage, () => signals().charState === 'rushingToDesk')
+        expect(longestStep(back)).toBeLessThanOrEqual(ONE_FRAME_OF_RUNNING)
+        expect(stage.props().placement).toEqual(AT_DESK)
+        expect(signals().charState).toBe('resting')
+      })
+    })
+
+    describe('with reduced motion', () => {
+      beforeEach(() => {
+        useSettings.setState({ reduceMotion: true })
+      })
+
+      it('is on the sofa in one cut once the ten seconds are over: no walk, no hop, nothing waited for', () => {
+        const stage = mount()
+        stage.run(SOFA_AFTER_MS / 1000 - 0.05)
+        expect(stage.props().placement).toEqual(AT_DESK)
+        const cut = film(stage, () => stage.playback.name !== 'loungeIdle', 1)
+        // Within a few frames, and straight from sitting at the desk to lounging.
+        expect(cut.length).toBeLessThan(8)
+        expect(new Set(cut.map(({ clip }) => clip))).toEqual(new Set(['idle', 'loungeIdle']))
+        expect(signals()).toEqual({ bubble: [], badge: 'idle', charState: 'resting' })
+        expect(place()).toBe('sofa')
+        expect(stage.props()).toMatchObject({ clip: 'loungeIdle', placement: ON_SOFA })
+        // It changes place in the frame it is first shown lounging, and in no other.
+        for (const frame of cut) expect(frame.onSeatSpot).toBe(frame.clip === 'loungeIdle')
+        expect(cut.filter(({ onSeatSpot }) => !onSeatSpot).every(({ body: [x, z] }) => x === SEAT_GROUND_POS[0] && z === SEAT_GROUND_POS[2])).toBe(true)
+      })
+
+      it('is back at its desk in one cut when the chat is used: no hop, no run, and ready at once', () => {
+        const stage = mount()
+        stage.until(() => stage.playback.name === 'loungeIdle', 12)
+        expect(stage.props().placement).toEqual(ON_SOFA)
+        chat()
+        // Seated and ready the moment it is called: it never is on its way.
+        expect(signals()).toEqual({ bubble: [], badge: 'idle', charState: 'resting' })
+        expect(place()).toBe('desk')
+        // The very next frame shows it at its desk, straight from lounging.
+        const cut = film(stage, () => stage.playback.name !== 'idle', 1)
+        expect(cut).toHaveLength(1)
+        expect(cut[0]).toMatchObject({ clip: 'idle', onSeatSpot: false, body: [SEAT_GROUND_POS[0], SEAT_GROUND_POS[2]] })
+        expect(stage.props()).toMatchObject({ clip: 'idle', placement: AT_DESK })
+      })
+
+      it('never plays a walk, a run or a hop through any number of rounds', () => {
+        const stage = mount()
+        const played = new Set<string>()
+        const states = new Set<string>()
+        const note = (seen: Seen[]) =>
+          seen.forEach(({ clip, state }) => {
+            played.add(String(clip))
+            states.add(state)
+          })
+        for (let round = 0; round < 3; round++) {
+          note(film(stage, () => stage.playback.name !== 'loungeIdle', 12))
+          expect(place()).toBe('sofa')
+          chat()
+          note(film(stage, () => stage.playback.name !== 'idle', 1))
+          expect(place()).toBe('desk')
+        }
+        expect([...played].sort()).toEqual(['idle', 'loungeIdle'])
+        // Nor is it ever seen on its way: it waits here, and then it waits there.
+        expect([...states]).toEqual(['resting'])
+      })
+
+      it('runs the whole way back when reduced motion is switched off while it lounges', () => {
+        const stage = mount()
+        stage.until(() => stage.playback.name === 'loungeIdle', 12)
+        stage.run(1)
+        act(() => useSettings.setState({ reduceMotion: false }))
+        chat()
+        const back = film(stage, () => signals().charState === 'rushingToDesk')
+        // Off the sofa onto the floor in front of it, and from there round the desk: no step is skipped.
+        expect(clipsOf(back)).toEqual(['hopOff', 'run', 'sitDown'])
+        expect(longestStep(back)).toBeLessThanOrEqual(ONE_FRAME_OF_RUNNING)
+        expectPlacedByClip(back)
+        expect(back.filter(({ clip }) => clip === 'run').length * FRAME).toBeGreaterThan(1.7)
+        expect(stage.props().placement).toEqual(AT_DESK)
+      })
+
+      it('works at once on a task started on the sofa, and hands it over', () => {
+        const stage = mount()
+        stage.until(() => stage.playback.name === 'loungeIdle', 12)
+        const task = startTask()
+        stage.run(0.1)
+        expect(signals()).toEqual({ bubble: [], badge: 'thinking', charState: 'working' })
+        expect(stage.props()).toMatchObject({ clip: 'think', placement: AT_DESK })
+        finish(task.id)
+        stage.untilState('handingFile')
+        expect(stage.props().placement).toEqual({ position: [...HANDOFF_POS], facing: HANDOFF_FACING })
+      })
+    })
+
+    describe('when reduced motion is switched on on the way', () => {
+      it.each([
+        ['while it walks to the sofa', 'walk', 2, 'sofa'],
+        ['during the hop onto it', 'hopOn', 0.2, 'sofa'],
+      ] as const)('%s: it is on the sofa at once', (_, during, seconds, where) => {
+        const stage = mount()
+        stage.until(() => stage.playback.name === during, 30)
+        stage.run(seconds)
+        act(() => useSettings.setState({ reduceMotion: true }))
+        stage.run(0.1)
+        expect(signals()).toEqual({ bubble: [], badge: 'idle', charState: 'resting' })
+        expect(place()).toBe(where)
+        expect(stage.props()).toMatchObject({ clip: 'loungeIdle', placement: ON_SOFA })
+      })
+
+      it.each([
+        ['while it hops off the sofa', 'hopOff', 0.1],
+        ['while it runs back', 'run', 1],
+        ['while it sits down', 'sitDown', 0.3],
+      ] as const)('%s: it is at its desk at once, at rest', (_, during, seconds) => {
+        const stage = mount()
+        untilOnSofa(stage)
+        chat()
+        stage.until(() => stage.playback.name === during)
+        stage.run(seconds)
+        act(() => useSettings.setState({ reduceMotion: true }))
+        stage.run(0.1)
+        expect(signals()).toEqual({ bubble: [], badge: 'idle', charState: 'resting' })
+        expect(stage.props()).toMatchObject({ clip: 'idle', placement: AT_DESK })
+      })
+    })
+
+    describe('the end of a clip that is no longer its business', () => {
+      const late = (stage: ReturnType<typeof mount>, clip: ClipName) => act(() => stage.props().onClipFinished(clip))
+
+      it('does not seat it on the sofa before it has hopped there, nor at its desk before it is back', () => {
+        const stage = mount()
+        stage.until(() => stage.playback.name === 'walk', 30)
+        stage.run(1)
+        for (const clip of ['standUp', 'hopOn', 'hopOff', 'sitDown', 'loungeWave'] as const) late(stage, clip)
+        expect(signals().charState).toBe('goingToSofa')
+        expect(stage.props().clip).toBe('walk')
+
+        untilOnSofa(stage)
+        chat()
+        stage.until(() => stage.playback.name === 'run')
+        for (const clip of ['standUp', 'hopOn', 'hopOff', 'sitDown', 'loungeStretch'] as const) late(stage, clip)
+        expect(signals().charState).toBe('rushingToDesk')
+        expect(stage.props().clip).toBe('run')
+        stage.untilState('resting')
+        expect(stage.props().placement).toEqual(AT_DESK)
+      })
+
+      it('does not end the wave or a fidget on the sofa unless it is theirs', () => {
+        const stage = mount()
+        untilOnSofa(stage)
+        pointer('pointermove', 200, 150)
+        stage.untilState('greeting')
+        for (const clip of ['wave', 'hopOn', 'loungeStretch', 'sitDown'] as const) late(stage, clip)
+        expect(signals().charState).toBe('greeting')
+        late(stage, 'loungeWave')
+        expect(signals().charState).toBe('fidgeting')
+        for (const clip of ['stretch', 'loungeWave', 'loungeLookAround'] as const) late(stage, clip)
+        expect(signals().charState).toBe('fidgeting')
+        late(stage, 'loungeStretch')
+        expect(signals().charState).toBe('resting')
+        expect(place()).toBe('sofa')
+      })
     })
   })
 

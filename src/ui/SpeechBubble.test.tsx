@@ -38,7 +38,9 @@ function cameraOf(spec: CameraSpec, width: number, height: number): PerspectiveC
 }
 
 function say(...bubble: string[]) {
-  act(() => useCharacterSignals.getState().publish({ bubble, badge: 'working', charState: 'working' }))
+  act(() =>
+    useCharacterSignals.getState().publish({ bubble, badge: 'working', charState: 'working', place: 'desk', present: true }),
+  )
 }
 
 const SEATED = bubbleAnchorAt(SEAT_GROUND_POS, SEAT_LIFT)
@@ -47,7 +49,7 @@ const HANDING_OVER = bubbleAnchorAt(HANDOFF_POS, 0)
 beforeEach(() => {
   localStorage.clear()
   useSettings.setState({ reduceMotion: false })
-  useCharacterSignals.getState().publish({ bubble: [], badge: 'idle', charState: 'resting' })
+  useCharacterSignals.getState().publish({ bubble: [], badge: 'idle', charState: 'resting', place: 'desk', present: true })
   useCharacterSignals.getState().bubbleAnchor.current = [...SEATED]
 })
 

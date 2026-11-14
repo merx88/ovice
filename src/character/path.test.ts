@@ -1,8 +1,28 @@
 import { describe, expect, it } from 'vitest'
-import { HANDOFF_FACING, SEAT_FACING, WALK_CORNER_RADIUS, WALK_OUT_PATH, type Vec3 } from '../scene/layout'
-import { WALK_PACE } from './clipForState'
+import {
+  HANDOFF_FACING,
+  SEAT_FACING,
+  SOFA_FACING,
+  SOFA_PATH,
+  WALK_CORNER_RADIUS,
+  WALK_OUT_PATH,
+  type Vec3,
+} from '../scene/layout'
+import { RUN_PACE, WALK_PACE } from './clipForState'
+import { RUN_SPEED } from './clips/run'
 import { WALK_SPEED } from './clips/walk'
-import { measurePath, roundCorners, samplePath, stepWalker, turnBetween, type Path, type Walker } from './path'
+import {
+  measurePath,
+  roundCorners,
+  RUN_TURNING,
+  samplePath,
+  stepWalker,
+  turnBetween,
+  WALK_TURNING,
+  type Path,
+  type Turning,
+  type Walker,
+} from './path'
 
 const FRAME = 1 / 60
 const QUARTER = Math.PI / 2
@@ -434,5 +454,158 @@ describe('the walk round the desk', () => {
       expect(step.moved / FRAME).toBeGreaterThan(speed * 0.85)
       expect(step.moved / FRAME).toBeLessThanOrEqual(speed * 1.0001)
     }
+  })
+})
+
+describe('the way to the sofa and the run back', () => {
+  const route = measurePath(roundCorners(SOFA_PATH, WALK_CORNER_RADIUS))
+  const walking = WALK_SPEED * WALK_PACE
+  const running = RUN_SPEED * RUN_PACE
+  /** A character sits down once it faces its desk to within this (see the driver). */
+  const FACES_DESK = 0.1
+
+  interface Step {
+    /** Metres along the route after the step. */
+    distance: number
+    /** How far the step moved over the ground (m). */
+    moved: number
+    /** The angle between the way it faced and the way the step moved it. */
+    askew: number
+    /** How far the step turned it (rad). */
+    turned: number
+  }
+
+  /** Moves a walker from where it is to `goal` until it has arrived and faces `goalFacing` to within `within`. */
+  function travel(
+    walker: Walker,
+    goal: number,
+    goalFacing: number,
+    speed: number,
+    turning: Turning,
+    { dt = FRAME, within = 0.26 } = {},
+  ): { seconds: number; steps: Step[] } {
+    const steps: Step[] = []
+    let seconds = 0
+    let from = [...samplePath(route, walker.distance).position]
+    let faced = walker.facing
+    for (;;) {
+      const arrived = stepWalker(walker, route, goal, goalFacing, speed, dt, turning)
+      if (arrived && Math.abs(turnBetween(walker.facing, goalFacing)) <= within) break
+      seconds += dt
+      const to = samplePath(route, walker.distance).position
+      const moved = Math.hypot(to[0] - from[0], to[2] - from[2])
+      const course = Math.atan2(to[0] - from[0], to[2] - from[2])
+      steps.push({
+        distance: walker.distance,
+        moved,
+        askew: moved > 1e-9 ? Math.abs(turnBetween(walker.facing, course)) : 0,
+        turned: Math.abs(turnBetween(faced, walker.facing)),
+      })
+      from = [...to]
+      faced = walker.facing
+      if (seconds > 30) throw new Error('never arrived')
+    }
+    return { seconds, steps }
+  }
+
+  const underWay = (steps: Step[]) => steps.filter(({ distance }) => distance > 0.6 && distance < route.length - 0.6)
+
+  it('is walked out in some five seconds, ending with its back to the sofa', () => {
+    const walker: Walker = { distance: 0, facing: SEAT_FACING }
+    const { seconds, steps } = travel(walker, route.length, SOFA_FACING, walking, WALK_TURNING)
+    expect(seconds).toBeGreaterThan(4.8)
+    expect(seconds).toBeLessThan(5.8)
+    expect(walker.distance).toBe(route.length)
+    expect(Math.abs(turnBetween(walker.facing, SOFA_FACING))).toBeLessThan(0.26)
+    // It faces the way it goes through all three bends.
+    for (const step of underWay(steps)) expect(step.askew, `${step.distance.toFixed(2)} m along`).toBeLessThan(0.15)
+  })
+
+  it('is run back in about two seconds, to the chair and facing the desk', () => {
+    const walker: Walker = { distance: route.length, facing: SOFA_FACING }
+    const { seconds } = travel(walker, 0, SEAT_FACING, running, RUN_TURNING, { within: FACES_DESK })
+    expect(seconds).toBeGreaterThan(1.7)
+    expect(seconds).toBeLessThan(2.2)
+    expect(walker.distance).toBe(0)
+  })
+
+  it('sets off on the run the way it lands from the sofa, without turning first', () => {
+    const walker: Walker = { distance: route.length, facing: SOFA_FACING }
+    stepWalker(walker, route, 0, SEAT_FACING, running, FRAME, RUN_TURNING)
+    expect(route.length - walker.distance).toBeCloseTo(running * FRAME, 3)
+  })
+
+  it('faces where it goes at a run, through the bends too, and never slides sideways', () => {
+    const walker: Walker = { distance: route.length, facing: SOFA_FACING }
+    const { steps } = travel(walker, 0, SEAT_FACING, running, RUN_TURNING, { within: FACES_DESK })
+    for (const step of steps) expect(step.askew, `${step.distance.toFixed(2)} m along`).toBeLessThan(Math.PI / 4 + 0.02)
+    for (const step of underWay(steps)) expect(step.askew, `${step.distance.toFixed(2)} m along`).toBeLessThan(0.15)
+  })
+
+  it('keeps its pace through the bends, so that its feet and the ground agree', () => {
+    const walker: Walker = { distance: route.length, facing: SOFA_FACING }
+    const { steps } = travel(walker, 0, SEAT_FACING, running, RUN_TURNING, { within: FACES_DESK })
+    for (const step of underWay(steps)) {
+      expect(step.moved / FRAME, `${step.distance.toFixed(2)} m along`).toBeGreaterThan(running * 0.8)
+      expect(step.moved / FRAME).toBeLessThanOrEqual(running * 1.0001)
+    }
+  })
+
+  it('needs a turning of its own for that: with the walk\'s it is left behind in every bend', () => {
+    const walker: Walker = { distance: route.length, facing: SOFA_FACING }
+    const { steps } = travel(walker, 0, SEAT_FACING, running, WALK_TURNING, { within: FACES_DESK })
+    const mid = underWay(steps)
+    expect(Math.max(...mid.map(({ askew }) => askew))).toBeGreaterThan(0.3)
+    expect(Math.min(...mid.map(({ moved }) => moved / FRAME))).toBeLessThan(running * 0.7)
+    // The default is the walk's, which is what every way walked so far has used.
+    const usual: Walker = { distance: 0, facing: SEAT_FACING }
+    const named: Walker = { distance: 0, facing: SEAT_FACING }
+    for (let frame = 0; frame < 120; frame++) {
+      stepWalker(usual, route, route.length, SOFA_FACING, walking, FRAME)
+      stepWalker(named, route, route.length, SOFA_FACING, walking, FRAME, WALK_TURNING)
+    }
+    expect(usual).toEqual(named)
+  })
+
+  it.each([
+    ['on the straight along the front of the desk', 4.8],
+    ['in the middle of the bend at the desk\'s left end', 2.05],
+    ['a step short of the sofa', 6.9],
+  ])('turns round where it is when it is called back %s', (_, at) => {
+    const out: Walker = { distance: 0, facing: SEAT_FACING }
+    while (out.distance < at) stepWalker(out, route, route.length, SOFA_FACING, walking, FRAME, WALK_TURNING)
+    const turnedAt = out.distance
+
+    const { seconds, steps } = travel(out, 0, SEAT_FACING, running, RUN_TURNING, { within: FACES_DESK })
+    // It spins round on the spot first: not a step for the first frames, and on its way within a third of a second.
+    const firstStep = steps.findIndex(({ moved }) => moved > 0)
+    expect(firstStep).toBeGreaterThan(3)
+    expect(firstStep * FRAME).toBeLessThan(0.3)
+    for (const step of steps.slice(0, firstStep)) expect(step.distance).toBe(turnedAt)
+    // Nothing jumps: no step is longer than one frame of running, and no frame turns it faster than a run turns.
+    for (const step of steps) {
+      expect(step.moved).toBeLessThanOrEqual(running * FRAME + 1e-9)
+      expect(step.turned).toBeLessThanOrEqual(RUN_TURNING.maxSpeed * FRAME + 1e-9)
+    }
+    // It takes no step while it faces more than an eighth of a turn away from where the route is about to
+    // take it, which in a bend is a little further round than where the step itself goes...
+    const aheadInABend = running / RUN_TURNING.rate / WALK_CORNER_RADIUS
+    for (const step of steps) expect(step.askew).toBeLessThan(Math.PI / 4 + aheadInABend + 0.02)
+    // ...and a quarter of a second after its first step it faces where it goes.
+    for (const step of steps.slice(firstStep + 15)) {
+      if (step.distance > 0.6) expect(step.askew, `${step.distance.toFixed(2)} m along`).toBeLessThan(0.15)
+    }
+    // Back the way it came, which takes less than the whole run.
+    expect(seconds).toBeLessThan(0.3 + turnedAt / running + 0.5)
+    expect(out.distance).toBe(0)
+  })
+
+  it('gets there as well where a frame takes a tenth of a second', () => {
+    const walker: Walker = { distance: route.length, facing: SOFA_FACING }
+    const { seconds, steps } = travel(walker, 0, SEAT_FACING, running, RUN_TURNING, { dt: 0.1, within: FACES_DESK })
+    expect(seconds).toBeLessThan(2.6)
+    for (const step of steps) expect(step.askew).toBeLessThan(Math.PI / 4 + 0.02)
+    const out: Walker = { distance: 0, facing: SEAT_FACING }
+    expect(travel(out, route.length, SOFA_FACING, walking, WALK_TURNING, { dt: 0.1 }).seconds).toBeLessThan(6.2)
   })
 })

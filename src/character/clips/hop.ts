@@ -2,9 +2,17 @@
 // sofa's seat spot: where it stands on the floor in front of the sofa is in
 // the pose, as an offset of the root.
 import { SOFA_FACING, SOFA_SEAT_POS, SOFA_STAND_POS } from '../../scene/layout'
-import { add, ARM_DOWN, arms, clamp01, mix, ramp, standingBase, type ArmPose, type Pose, type ProceduralClip, type Triple } from './shared'
-import { loungeBase } from './lounge'
+import { add, ARM_DOWN, arms, clamp01, mix, ramp, standingBase, type ArmPose, type ClipName, type Pose, type ProceduralClip, type Triple } from './shared'
+import { LOUNGE_CLIPS, loungeBase } from './lounge'
 import { run } from './run'
+
+/**
+ * The clips that are played with the character placed on the sofa's seat
+ * spot: lounging there, and the two hops, which carry the body between the
+ * seat and the floor in front of the sofa themselves. Whoever places the
+ * character puts it on the seat spot exactly while it is shown one of these.
+ */
+export const SEAT_SPOT_CLIPS: readonly ClipName[] = [...LOUNGE_CLIPS, 'hopOn', 'hopOff']
 
 /** From the seat spot to the stand spot, in the axes of a character facing the way it sits on the sofa. */
 const TO_STAND: Triple = (() => {

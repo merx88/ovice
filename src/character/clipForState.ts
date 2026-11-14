@@ -115,6 +115,27 @@ export function clipToPlay(
 }
 
 /**
+ * The phase a character starts `state` in. `from` is what it was doing until
+ * now and where it waited, and `phase` how far a journey it was on had come.
+ */
+export function firstPhase(state: CharState, from: { state: CharState; place: Place }, phase: TravelPhase): TravelPhase {
+  switch (state) {
+    case 'goingToSofa':
+      return 'rising'
+    case 'rushingToDesk':
+      // Called back from the sofa, it hops off first.
+      if (from.place === 'sofa') return 'rising'
+      if (from.state !== 'goingToSofa') return 'moving'
+      // Called back before it had left its chair, it sits straight down again; in the middle of
+      // the hop onto the sofa, it finishes that hop first; anywhere between, it runs from where it is.
+      if (phase === 'rising') return 'settling'
+      return phase === 'settling' ? 'landing' : 'moving'
+    default:
+      return 'moving'
+  }
+}
+
+/**
  * The phase that follows `phase` of a journey once the clip played in it has
  * come to its end, or null where the phase ends otherwise: by arriving
  * (`moving`), or with the journey itself (see `clipAwaitedBy`).

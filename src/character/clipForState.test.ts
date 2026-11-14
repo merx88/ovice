@@ -5,6 +5,7 @@ import {
   clipForState,
   clipSpeedFor,
   clipToPlay,
+  firstPhase,
   isThinkingStep,
   phaseAfterClip,
   RUN_PACE,
@@ -165,6 +166,52 @@ describe('clipToPlay', () => {
             expect(clipToPlay(state, fidget, step, 'desk', phase)).toBe(clipForState(state, fidget, step))
             // Only waiting is done differently on the sofa.
             if (!WAITING.includes(state)) expect(clipToPlay(state, fidget, step, 'sofa', phase)).toBe(clipForState(state, fidget, step))
+          }
+        }
+      }
+    }
+  })
+})
+
+describe('firstPhase', () => {
+  const at = (state: CharState, place: Place = 'desk') => ({ state, place })
+
+  it('starts the way to the sofa by getting up', () => {
+    for (const from of ['resting', 'watching'] as const) for (const phase of PHASES) expect(firstPhase('goingToSofa', at(from), phase)).toBe('rising')
+  })
+
+  it('starts the run back from the sofa with the hop off it', () => {
+    for (const from of WAITING) for (const phase of PHASES) expect(firstPhase('rushingToDesk', at(from, 'sofa'), phase)).toBe('rising')
+  })
+
+  it('sits a character straight back down that had not left its chair yet', () => {
+    expect(firstPhase('rushingToDesk', at('goingToSofa'), 'rising')).toBe('settling')
+  })
+
+  it('has a character that was on its way to the sofa run from where it is', () => {
+    expect(firstPhase('rushingToDesk', at('goingToSofa'), 'moving')).toBe('moving')
+  })
+
+  it('lets a hop onto the sofa that has begun be finished before the hop off', () => {
+    expect(firstPhase('rushingToDesk', at('goingToSofa'), 'settling')).toBe('landing')
+  })
+
+  it('starts every other state on the move: the walk back from a hand-over, and the states that have no phases', () => {
+    for (const state of STATES) {
+      if (state === 'goingToSofa' || state === 'rushingToDesk') continue
+      for (const from of STATES) for (const phase of PHASES) expect(firstPhase(state, at(from), phase)).toBe('moving')
+    }
+  })
+
+  it('always starts a journey in a phase that leads to its end', () => {
+    // From wherever it starts, the phases follow each other to the one whose clip the journey waits for.
+    for (const state of JOURNEYS) {
+      for (const from of STATES) {
+        for (const place of PLACES) {
+          for (const phase of PHASES) {
+            let current = firstPhase(state, at(from, place), phase)
+            for (let hops = 0; hops < 4 && current !== 'settling'; hops++) current = phaseAfterClip(state, current) ?? (current === 'moving' ? 'settling' : current)
+            expect(current, `${state} from ${from} at the ${place}, ${phase}`).toBe('settling')
           }
         }
       }

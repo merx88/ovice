@@ -14,12 +14,25 @@ import {
   type CharacterSignals,
 } from './characterSignals'
 
-const HANDING_OVER: CharacterSignals = { bubble: [MESSAGES.done[1]], badge: 'done', charState: 'handingFile' }
+const HANDING_OVER: CharacterSignals = {
+  bubble: [MESSAGES.done[1]],
+  badge: 'done',
+  charState: 'handingFile',
+  place: 'desk',
+  present: true,
+}
+/** What the store holds while no character is in the picture. */
+const NOBODY: CharacterSignals = { bubble: [], badge: 'idle', charState: 'resting', place: 'desk', present: false }
+
+/** The signals a store holds, without the anchor and the function. */
+function signalsOf(store: ReturnType<typeof createCharacterSignalsStore>): CharacterSignals {
+  const { bubble, badge, charState, place, present } = store.getState()
+  return { bubble, badge, charState, place, present }
+}
 
 describe('character signals', () => {
-  it('start with a character that rests and says nothing', () => {
-    const { bubble, badge, charState } = createCharacterSignalsStore().getState()
-    expect({ bubble, badge, charState }).toEqual({ bubble: [], badge: 'idle', charState: 'resting' })
+  it('start with nobody in the picture yet: nothing said, and the desk as the place a character would wait at', () => {
+    expect(signalsOf(createCharacterSignalsStore())).toEqual(NOBODY)
   })
 
   it('start with the bubble anchored beside the seated character', () => {
@@ -30,8 +43,7 @@ describe('character signals', () => {
   it('take what is published', () => {
     const store = createCharacterSignalsStore()
     store.getState().publish(HANDING_OVER)
-    const { bubble, badge, charState } = store.getState()
-    expect({ bubble, badge, charState }).toEqual(HANDING_OVER)
+    expect(signalsOf(store)).toEqual(HANDING_OVER)
   })
 
   it('tell subscribers nothing when the same values are published again', () => {
@@ -64,6 +76,8 @@ describe('character signals', () => {
     ['the lines go away', { bubble: [] }],
     ['the badge changes', { badge: 'error' }],
     ['the state changes', { charState: 'returning' }],
+    ['the place changes', { place: 'sofa' }],
+    ['the character is gone', { present: false }],
   ])('tell subscribers once when %s', (_, change) => {
     const store = createCharacterSignalsStore()
     store.getState().publish(HANDING_OVER)
@@ -73,8 +87,7 @@ describe('character signals', () => {
     store.getState().publish({ ...HANDING_OVER, ...change })
 
     expect(listener).toHaveBeenCalledTimes(1)
-    const { bubble, badge, charState } = store.getState()
-    expect({ bubble, badge, charState }).toEqual({ ...HANDING_OVER, ...change })
+    expect(signalsOf(store)).toEqual({ ...HANDING_OVER, ...change })
   })
 
   it('keep one anchor for good, which can move without anyone being told', () => {
@@ -108,7 +121,7 @@ describe('the hooks for the interface', () => {
     expect(renderHook(() => useCharState()).result.current).toBe('handingFile')
     expect(renderHook(() => useBubbleAnchor()).result.current).toBe(useCharacterSignals.getState().bubbleAnchor)
 
-    useCharacterSignals.getState().publish({ bubble: [], badge: 'idle', charState: 'resting' })
+    useCharacterSignals.getState().publish(NOBODY)
   })
 
   it('do not render again when the anchor moves or the same values are published', () => {
@@ -125,6 +138,6 @@ describe('the hooks for the interface', () => {
 
     expect(renders).toBe(before)
     useCharacterSignals.getState().bubbleAnchor.current[1] -= 1
-    useCharacterSignals.getState().publish({ bubble: [], badge: 'idle', charState: 'resting' })
+    useCharacterSignals.getState().publish(NOBODY)
   })
 })

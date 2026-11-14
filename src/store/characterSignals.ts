@@ -4,7 +4,7 @@
 import { create } from 'zustand'
 import { bubbleAnchorAt } from '../character/bubble'
 import { SEAT_LIFT } from '../character/clips/shared'
-import type { CharState } from '../character/stateMachine'
+import type { CharState, Place } from '../character/stateMachine'
 import type { BadgeStatus } from '../character/statusSymbols'
 import { SEAT_GROUND_POS } from '../scene/layout'
 
@@ -29,6 +29,14 @@ export interface CharacterSignals {
   badge: BadgeStatus
   /** What the character is doing. */
   charState: CharState
+  /** Where it waits: at its desk, or on the sofa (see `CharMachine.place`). */
+  place: Place
+  /**
+   * Whether the character is in the picture. False until its model has
+   * loaded and it has appeared, and again once it is gone; the other signals
+   * then say what they say of a character resting at its desk, and mean nothing.
+   */
+  present: boolean
 }
 
 export interface CharacterSignalsState extends CharacterSignals {
@@ -50,6 +58,8 @@ export function createCharacterSignalsStore() {
     bubble: [],
     badge: 'idle',
     charState: 'resting',
+    place: 'desk',
+    present: false,
     bubbleAnchor: { current: bubbleAnchorAt(SEAT_GROUND_POS, SEAT_LIFT) },
     publish: (next) => {
       const held = get()
@@ -57,6 +67,8 @@ export function createCharacterSignalsStore() {
       if (!sameLines(held.bubble, next.bubble)) changed.bubble = next.bubble
       if (held.badge !== next.badge) changed.badge = next.badge
       if (held.charState !== next.charState) changed.charState = next.charState
+      if (held.place !== next.place) changed.place = next.place
+      if (held.present !== next.present) changed.present = next.present
       if (Object.keys(changed).length > 0) set(changed)
     },
   }))

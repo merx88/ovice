@@ -143,16 +143,23 @@ export interface Walker {
   facing: number
 }
 
-/** How the walker turns: it closes this share of the turn left per second (1/s), but never faster than `maxSpeed` (rad/s). */
-const TURN = { rate: 10, maxSpeed: 7 } as const
+/** How somebody on a path turns: they close `rate` of the turn left per second (1/s), but never faster than `maxSpeed` (rad/s). */
+export interface Turning {
+  rate: number
+  maxSpeed: number
+}
+
+/** How the character turns at a walk: a half turn takes about half a second. */
+export const WALK_TURNING: Turning = { rate: 10, maxSpeed: 7 }
+/**
+ * How it turns at a run. The bends of its routes come more than twice as
+ * fast then, and with a walk's turning it would be left facing where it was
+ * going a moment ago in every one of them; it also spins round on the spot
+ * in a scramble rather than a pivot.
+ */
+export const RUN_TURNING: Turning = { rate: 24, maxSpeed: 16 }
 /** A turn with less than this left (radians) is finished. */
 const TURN_DONE = 1e-3
-/**
- * The walker takes its heading from where it will be this many seconds from
- * now, which is how long its turning lags: it leans into a bend as it gets
- * there instead of drifting through it sideways.
- */
-const LOOK_AHEAD = 1 / TURN.rate
 /**
  * The walker only moves while it faces within this (radians) of the way it is
  * going, and faster the closer it faces it: further off than this it stands
@@ -191,14 +198,14 @@ function wrapYaw(yaw: number): number {
   return Math.abs(yaw) <= Math.PI ? yaw : turnBetween(0, yaw)
 }
 
-function turnWalker(walker: Walker, goal: number, dt: number): void {
+function turnWalker(walker: Walker, goal: number, dt: number, turning: Turning): void {
   const left = turnBetween(walker.facing, goal)
   const size = Math.abs(left)
   if (size <= TURN_DONE) {
     walker.facing = wrapYaw(goal)
     return
   }
-  const step = Math.min(size * (1 - Math.exp(-TURN.rate * dt)), TURN.maxSpeed * dt)
+  const step = Math.min(size * (1 - Math.exp(-turning.rate * dt)), turning.maxSpeed * dt)
   walker.facing = wrapYaw(walker.facing + Math.sign(left) * step)
 }
 
@@ -210,7 +217,8 @@ function turnWalker(walker: Walker, goal: number, dt: number): void {
  * It faces the way it goes: it turns on the spot before it sets off in a new
  * direction, follows bends, slows over the last steps and turns to
  * `goalFacing` as it arrives, finishing the turn on the spot. `speed` (m/s) is
- * how fast it walks when nothing holds it back.
+ * how fast it goes when nothing holds it back, and `turning` how it turns: a
+ * walk's turning unless it is given a run's.
  */
 export function stepWalker(
   walker: Walker,
@@ -219,22 +227,25 @@ export function stepWalker(
   goalFacing: number,
   speed: number,
   dt: number,
+  turning: Turning = WALK_TURNING,
 ): boolean {
   const target = Math.min(path.length, Math.max(0, goal))
   const left = Math.abs(target - walker.distance)
   if (left === 0) {
-    turnWalker(walker, goalFacing, dt)
+    turnWalker(walker, goalFacing, dt, turning)
     return Math.abs(turnBetween(walker.facing, goalFacing)) <= ARRIVED_WITHIN
   }
 
   const direction = Math.sign(target - walker.distance)
-  const ahead = walker.distance + direction * Math.min(left, speed * LOOK_AHEAD)
+  // It takes its heading from where it will be when its turning has caught up, which is how long
+  // the turning lags: it leans into a bend as it gets there instead of drifting through it sideways.
+  const ahead = walker.distance + direction * Math.min(left, speed / turning.rate)
   let heading = samplePath(path, ahead, scratch).heading + (direction < 0 ? Math.PI : 0)
   if (left < TURN_IN_DISTANCE) {
     const turnIn = Math.min(MOVES_WITHIN, Math.max(-MOVES_WITHIN, turnBetween(heading, goalFacing)))
     heading += turnIn * ease(1 - left / TURN_IN_DISTANCE)
   }
-  turnWalker(walker, heading, dt)
+  turnWalker(walker, heading, dt, turning)
 
   const facingIt = Math.cos(turnBetween(walker.facing, heading))
   const pace =
