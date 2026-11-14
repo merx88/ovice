@@ -220,6 +220,16 @@ export function Character(props: CharacterProps) {
       // A hop is played from the sofa's seat spot with the root held out to where the body is, so the
       // placement jumps where a hop joins a walk or a run. The body must not: what the fade starts
       // from is carried over into the new placement. (Any other jump of the placement stays a jump.)
+      //
+      // This acts only when the clip starts and the placement jumps in one and the same frame, and
+      // whoever places the character has to see to that. The clip reaches the character as a prop, a
+      // render after it was asked for; the placement is one object rewritten in place, read here every
+      // frame. So the placement may change in the first frame in which the new clip is the one that
+      // has been rendered, and in no other: a frame early, the old pose is drawn in the new place and
+      // nothing is carried over when the clip then starts (see `carryOver.ts`, and `useCharacterDriver`,
+      // which places the character by the clip it has been shown).
+      // A hop that comes with the model file is not carried over (its reach is taken as 0): such a
+      // clip would have to be made for the stand spot.
       const was = state.placed
       const jumped = was !== null && (was.facing !== facing || was.position.some((value, axis) => value !== position[axis]))
       const reach = Math.max(state.reach, resolved.kind === 'procedural' ? rootReach(resolved.clip.sample(0)) : 0)

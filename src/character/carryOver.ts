@@ -4,6 +4,19 @@
 // stands: at the join of two such clips the placement changes by half a
 // metre from one frame to the next, and the pose the cross-fade starts from
 // has to be carried over into the new placement, or the body would jump.
+//
+// The contract with whoever places the character: the placement changes in
+// the very frame in which the character starts on the clip that needs it,
+// which is the first frame in which that clip is the one that has been
+// rendered, a render after it was asked for. Changed with the request, a
+// frame early, the placement would move the old pose to the new place for
+// that frame (the jump this is here to prevent), and the clip would then
+// start with no jump of the placement left to carry anything over. With
+// reduced motion a character changes place in one cut, and nothing here acts.
+//
+// Only the hops written in `clips/hop.ts` are carried over: a hop that comes
+// with the model file has no reach the character knows of (it is taken as 0),
+// so such a clip would have to be made for the stand spot.
 import { Matrix4, Quaternion, Vector3 } from 'three'
 
 /** Where a character is placed: a point on the ground and a yaw about +y (0 faces +z). */
